@@ -4,6 +4,8 @@ from urllib.request import urlretrieve
 from bs4 import BeautifulSoup
 from bidict import bidict
 
+from utils.metanetx_mapper import MetaNetXMapper
+
 class KeggMap():
 
     def __init__(self, 
@@ -12,6 +14,9 @@ class KeggMap():
                  reactions: list = [], 
                  reaction_positions: dict = {}
                  ) -> None:
+        
+        self.m_mapper = MetaNetXMapper("resources/metabolite_mapping.tsv", "first")
+        self.r_mapper = MetaNetXMapper("resources/reaction_mapping.tsv", "first")
 
         self.reset()
 
@@ -142,7 +147,11 @@ class KeggMap():
 
         metabolites = {
             me: {
-                "ids": {"KEGG": me, "BIGG": None, "SEED": None},
+                "ids": {
+                        "KEGG": me, 
+                        "BIGG": self.m_mapper.get(me).bigg if self.m_mapper.get(me) else None, 
+                        "SEED": self.m_mapper.get(me).seed if self.m_mapper.get(me) else None
+                       },
                 "position": self.metabolites_positions[me],
             }
             for me in self.metabolites
@@ -154,7 +163,11 @@ class KeggMap():
 
         reactions = {
             r: {
-                "ids": {"KEGG": r, "BIGG": self.r_k2b.get(r, None), "SEED": self.r_k2s.get(r, None)},
+                "ids": {
+                        "KEGG": r, 
+                        "BIGG": self.r_mapper.get(r).bigg if self.r_mapper.get(r) else None, 
+                        "SEED": self.r_mapper.get(r).seed if self.r_mapper.get(r) else None
+                       },
                 "position": self.reaction_positions[r],
                 "substrates": self.reaction_substrates.get(r, {"main": [], "side": []}),
                 "products": self.reaction_products.get(r, {"main": [], "side": []}),
