@@ -83,9 +83,9 @@ class EscherMapper:
         r_desc = self._add_edges_to_reactions_descriptions(self.reactions, r_desc, global_nodes_idxs)
 
         # extract and prepare data from model
-        cobra_model_metabolites, cobra_model_reactions = self._parse_model(cobra_model)
+        cobra_model_metabolites, anti_metabolites, cobra_model_reactions = self._parse_model(cobra_model, m_desc, r_nodes)
         all_nodes, r2indx_dict = self._subtract_not_in_model_reactions(global_nodes_idxs, r_nodes, all_nodes, cobra_model_reactions, r2indx_dict)
-        all_nodes = self._subtract_not_in_model_metabolites(global_nodes_idxs, all_nodes, m_desc, cobra_model_metabolites)
+        all_nodes = self._subtract_not_in_model_metabolites(global_nodes_idxs, all_nodes, anti_metabolites)
 
         model["nodes"] = {i:j for i,j in all_nodes.items() if j}
         
@@ -547,12 +547,12 @@ class EscherMapper:
     
     # model integration
 
-    def _parse_model(self, model):
+    def _parse_model(self, model, m_nodes, r_nodes):
 
         rs = self._extract_model_reactions(model)
-        ms = self._extract_model_metabolites(model)
+        ms, anti_ms = self._extract_model_metabolites(model, m_nodes)
 
-        return ms, rs
+        return ms, anti_ms, rs
     
     def _extract_model_reactions(self, model):
 
@@ -569,20 +569,35 @@ class EscherMapper:
 
         return rs
 
-    def _extract_model_metabolites(self, model):
+    def _extract_model_metabolites(self, model, m_nodes):
 
-        ms = {"KEGG": set(), "BIGG": set(), "SEED": set()}
+        ms_names = {"KEGG": set(), "BIGG": set(), "SEED": set()}
+        ms = {}
+        anti_ms = []
 
         for _, r in enumerate(model.metabolites):
 
-            for k in ms.keys():
+            for k in ms_names.keys():
 
                 names = r.annotation.get(f'{k.lower()}.{"metabolite" if k=="BIGG" else "compound"}')
                 names = names if type(names) is list else [names]
             
-                ms[k] |= set(names)
+                ms_names[k] |= set(names)
 
-        return ms
+            for m in m_nodes.keys():
+
+                keggs = set([m])
+                biggs = set(self.m_mapper[m].bigg_all) if self.r_mapper.get(m) else set()
+                seeds = set(self.m_mapper[m].seed_all) if self.r_mapper.get(m) else set()
+
+                
+                if not (keggs & ms_names["KEGG"] or biggs & ms_names["BIGG"] or seeds & ms_names["SEED"]):
+                    ms[m] = r
+                    break
+            else:
+                anti_ms.append(m)
+
+        return ms, anti_ms
     
     def _subtract_not_in_model_reactions(self, global_idxs, r_nodes, nodes, model_reactions, r2indx_dict):
 
@@ -602,16 +617,11 @@ class EscherMapper:
 
         return nodes, r2indx_dict
     
-    def _subtract_not_in_model_metabolites(self, global_idxs, nodes, m_nodes, model_ms):
+    def _subtract_not_in_model_metabolites(self, global_idxs, nodes, anti_ms):
 
-        for m in m_nodes.keys():
+        for m in anti_ms:
 
-            keggs = set([m])
-            biggs = set(self.m_mapper[m].bigg_all) if self.r_mapper.get(m) else set()
-            seeds = set(self.m_mapper[m].seed_all) if self.r_mapper.get(m) else set()
-
-            if not (keggs & model_ms["KEGG"] or biggs & model_ms["BIGG"] or seeds & model_ms["SEED"]):
-                nodes[global_idxs["metabolites"][m]] = None
+            nodes[global_idxs["metabolites"][m]] = None
 
         return nodes
 
