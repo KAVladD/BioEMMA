@@ -83,9 +83,13 @@ class EscherMapper:
         r_desc = self._add_edges_to_reactions_descriptions(self.reactions, r_desc, global_nodes_idxs)
 
         # extract and prepare data from model
-        cobra_model_metabolites, anti_metabolites, cobra_model_reactions = self._parse_model(cobra_model, m_desc, r_nodes)
-        all_nodes, r2indx_dict = self._subtract_not_in_model_reactions(global_nodes_idxs, r_nodes, all_nodes, cobra_model_reactions, r2indx_dict)
+        cobra_model_metabolites, anti_metabolites, cobra_model_reactions, anti_reactions = self._parse_model(cobra_model, m_desc, r_nodes)
+        all_nodes, r2indx_dict = self._subtract_not_in_model_reactions(global_nodes_idxs, all_nodes, anti_reactions, r2indx_dict)
         all_nodes = self._subtract_not_in_model_metabolites(global_nodes_idxs, all_nodes, anti_metabolites)
+
+        # побочные метаболиты
+        secondary_data = self._extract_secondary_metabolites(cobra_model_reactions)
+        all_nodes, r_desc = self._add_secondary_metabolites(secondary_data, all_nodes, r_desc, global_nodes_idxs)
 
         model["nodes"] = {i:j for i,j in all_nodes.items() if j}
         
@@ -166,7 +170,7 @@ class EscherMapper:
         reaction_dict = {
             "name": name,
             "bigg_id": id,
-            "reversibility": reaction["reversibility"],
+            "reversibility": reaction["reversibility"] in ("reversible", True),
             "gene_reaction_rule": "",
             "genes": [],
             "metabolites": [],
@@ -179,13 +183,13 @@ class EscherMapper:
         reaction_dict["metabolites"].extend([{"kegg_id": self.metabolites[m]["ids"]["KEGG"],
                                               "bigg_id": self.metabolites[m]["ids"]["BIGG"],
                                               "seed_id": self.metabolites[m]["ids"]["SEED"], 
-                                              "coef": -1} 
+                                              "coefficient": -1} 
                                              for m in reaction["substrates"].get("main", [])])
         
         reaction_dict["metabolites"].extend([{"kegg_id": self.metabolites[m]["ids"]["KEGG"],
                                               "bigg_id": self.metabolites[m]["ids"]["BIGG"],
                                               "seed_id": self.metabolites[m]["ids"]["SEED"],
-                                              "coef": 1} 
+                                              "coefficient": 1} 
                                              for m in reaction["products"].get("main", [])])
 
         return reaction_dict
@@ -549,25 +553,46 @@ class EscherMapper:
 
     def _parse_model(self, model, m_nodes, r_nodes):
 
-        rs = self._extract_model_reactions(model)
+        matched_rs, anti_rs = self._extract_model_reactions(model, r_nodes)
         ms, anti_ms = self._extract_model_metabolites(model, m_nodes)
 
-        return ms, anti_ms, rs
+        return ms, anti_ms, matched_rs, anti_rs
     
-    def _extract_model_reactions(self, model):
+    def _extract_model_reactions(self, model, r_nodes):
 
-        rs = {"KEGG": set(), "BIGG": set(), "SEED": set()}
+        matched = {}      # kegg_name → cobra_reaction (есть на карте И в модели)
+        anti_reactions = []  # kegg_name реакций карты, которых НЕТ в модели
 
-        for _, r in enumerate(model.reactions):
+        for r_name in r_nodes.keys():
 
-            for k in rs.keys():
+            keggs = set([r_name])
+            biggs = set(self.r_mapper[r_name].bigg_all) if self.r_mapper.get(r_name) else set()
+            seeds = set(self.r_mapper[r_name].seed_all) if self.r_mapper.get(r_name) else set()
 
-                names = r.annotation.get(f"{k.lower()}.reaction")
-                names = names if type(names) is list else [names]
-            
-                rs[k] |= set(names)
+            found = None
+            for rxn in model.reactions:
 
-        return rs
+                rxn_kegg = rxn.annotation.get("kegg.reaction", [])
+                rxn_kegg = rxn_kegg if isinstance(rxn_kegg, list) else [rxn_kegg]
+
+                rxn_bigg = rxn.annotation.get("bigg.reaction", [])
+                rxn_bigg = rxn_bigg if isinstance(rxn_bigg, list) else [rxn_bigg]
+
+                rxn_seed = rxn.annotation.get("seed.reaction", [])
+                rxn_seed = rxn_seed if isinstance(rxn_seed, list) else [rxn_seed]
+
+                if (keggs & set(rxn_kegg) or
+                    biggs & set(rxn_bigg) or
+                    seeds & set(rxn_seed)):
+                    found = rxn
+                    break
+
+            if found:
+                matched[r_name] = found
+            else:
+                anti_reactions.append(r_name)
+
+        return matched, anti_reactions
 
     def _extract_model_metabolites(self, model, m_nodes):
 
@@ -599,23 +624,17 @@ class EscherMapper:
 
         return ms, anti_ms
     
-    def _subtract_not_in_model_reactions(self, global_idxs, r_nodes, nodes, model_reactions, r2indx_dict):
+    def _subtract_not_in_model_reactions(self, global_idxs, all_nodes, anti_rs, r2indx_dict):
 
-        for r, _ in r_nodes.items():
+        for r_name in anti_rs:
 
-            keggs = set([r])
-            biggs = set(self.r_mapper[r].bigg_all) if self.r_mapper.get(r) else set()
-            seeds = set(self.r_mapper[r].seed_all) if self.r_mapper.get(r) else set()
+            all_nodes[global_idxs["reactions"][r_name]] = None
+            all_nodes[global_idxs["multimarkers"][r_name]["in"]] = None
+            all_nodes[global_idxs["multimarkers"][r_name]["out"]] = None
 
-            if not (keggs & model_reactions["KEGG"] or biggs & model_reactions["BIGG"] or seeds & model_reactions["SEED"]):
-                nodes[global_idxs["reactions"][r]] = None
+            r2indx_dict[r_name] = None
 
-                nodes[global_idxs["multimarkers"][r]["in"]] = None
-                nodes[global_idxs["multimarkers"][r]["out"]] = None
-
-                r2indx_dict[r] = None
-
-        return nodes, r2indx_dict
+        return all_nodes, r2indx_dict
     
     def _subtract_not_in_model_metabolites(self, global_idxs, nodes, anti_ms):
 
@@ -624,6 +643,176 @@ class EscherMapper:
             nodes[global_idxs["metabolites"][m]] = None
 
         return nodes
+    
+    def _extract_secondary_metabolites(self, matched_rs):
+        """
+        Для каждой матчнутой реакции достаёт из COBRA-объекта метаболиты,
+        которых нет среди основных на карте.
+        
+        Возвращает {r_name: {"substrates": [...], "products": [...]}}
+        """
+
+        main_met_ids = set()
+        for m_name, m_data in self.metabolites.items():
+            ids = m_data["ids"]
+            for v in ids.values():
+                if v:
+                    main_met_ids.add(v)
+
+        secondary = {}
+
+        for r_name, cobra_rxn in matched_rs.items():
+
+            sec_subs = []
+            sec_prods = []
+
+            for met, coef in cobra_rxn.metabolites.items():
+
+                met_ids = set()
+                met_ids.add(met.id)
+                met_ids.add(met.id[:-2] if len(met.id) > 2 else met.id)
+
+                for key in ["kegg.compound", "bigg.metabolite", "seed.compound"]:
+                    ann = met.annotation.get(key, [])
+                    if isinstance(ann, str):
+                        ann = [ann]
+                    met_ids.update(ann)
+
+                if met_ids & main_met_ids:
+                    continue
+
+                entry = {"bigg_id": met.id, "name": met.name, "coefficient": coef}
+
+                if coef < 0:
+                    sec_subs.append(entry)
+                else:
+                    sec_prods.append(entry)
+
+            if sec_subs or sec_prods:
+                secondary[r_name] = {
+                    "substrates": sec_subs,
+                    "products": sec_prods,
+                }
+
+        return secondary
+    
+    def _add_secondary_metabolites(self, secondary_data, all_nodes, r_desc, global_idxs):
+
+        max_node_idx = max(int(k) for k in all_nodes.keys()) + 1
+        
+        seg_counter = 0
+        for r_name, r_data in r_desc.items():
+            if r_data["segments"]:
+                seg_counter = max(seg_counter, max(int(k) for k in r_data["segments"].keys()) + 1)
+
+        for r_name, sec in secondary_data.items():
+
+            r_node_idx = global_idxs["reactions"][r_name]
+            in_mm_idx = global_idxs["multimarkers"][r_name]["in"]
+            out_mm_idx = global_idxs["multimarkers"][r_name]["out"]
+
+            if (all_nodes.get(r_node_idx) is None or 
+                all_nodes.get(in_mm_idx) is None or 
+                all_nodes.get(out_mm_idx) is None):
+                continue
+
+            reaction_pos = np.array([all_nodes[r_node_idx]["x"], all_nodes[r_node_idx]["y"]], dtype=np.float64)
+            in_mm_pos = np.array([all_nodes[in_mm_idx]["x"], all_nodes[in_mm_idx]["y"]], dtype=np.float64)
+            out_mm_pos = np.array([all_nodes[out_mm_idx]["x"], all_nodes[out_mm_idx]["y"]], dtype=np.float64)
+
+            subs_center = self._calc_main_metabolites_center(
+                self.reactions[r_name]["substrates"].get("main", [])
+            )
+            prods_center = self._calc_main_metabolites_center(
+                self.reactions[r_name]["products"].get("main", [])
+            )
+
+            if sec["substrates"] and subs_center is not None:
+                direction, perp = self._calc_secondary_directions_from_center(reaction_pos, subs_center)
+                for j, entry in enumerate(sec["substrates"]):
+                    pos = self._calc_secondary_position(in_mm_pos, direction, perp, j, len(sec["substrates"]), side=1)
+                    node = self._generate_secondary_metabolite_dict(entry["bigg_id"], entry["name"], pos)
+                    all_nodes[max_node_idx] = node
+                    r_desc[r_name]["segments"][seg_counter] = self._prepare_edge_dict(max_node_idx, in_mm_idx)
+                    r_desc[r_name]["metabolites"].append({"bigg_id": entry["bigg_id"], "coefficient": entry["coefficient"]})
+                    seg_counter += 1
+                    max_node_idx += 1
+
+            if sec["products"] and prods_center is not None:
+                direction, perp = self._calc_secondary_directions_from_center(reaction_pos, prods_center)
+                for j, entry in enumerate(sec["products"]):
+                    pos = self._calc_secondary_position(out_mm_pos, direction, perp, j, len(sec["products"]), side=1)
+                    node = self._generate_secondary_metabolite_dict(entry["bigg_id"], entry["name"], pos)
+                    all_nodes[max_node_idx] = node
+                    r_desc[r_name]["segments"][seg_counter] = self._prepare_edge_dict(out_mm_idx, max_node_idx)
+                    r_desc[r_name]["metabolites"].append({"bigg_id": entry["bigg_id"], "coefficient": entry["coefficient"]})
+                    seg_counter += 1
+                    max_node_idx += 1
+
+        return all_nodes, r_desc
+
+
+    def _calc_main_metabolites_center(self, met_names):
+        
+        if not met_names:
+            return None
+        
+        positions = [np.array(self.metabolites[m]["position"], dtype=np.float64) for m in met_names]
+        return np.mean(positions, axis=0)
+
+
+    def _calc_secondary_directions_from_center(self, reaction_pos, mets_center):
+        
+        vec = mets_center - reaction_pos
+        norm = np.linalg.norm(vec)
+        
+        if norm > 0:
+            direction = vec / norm
+        else:
+            direction = np.array([1.0, 0.0])
+        
+        perp = np.array([-direction[1], direction[0]])
+        
+        return direction, perp
+        
+    def _calc_secondary_directions(self, in_mm_pos, out_mm_pos):
+
+        reaction_vec = out_mm_pos - in_mm_pos
+        norm = np.linalg.norm(reaction_vec)
+        
+        if norm > 0:
+            reaction_dir = reaction_vec / norm
+        else:
+            reaction_dir = np.array([1.0, 0.0])
+
+        perp = np.array([-reaction_dir[1], reaction_dir[0]])
+
+        return reaction_dir, perp
+
+
+    def _calc_secondary_position(self, anchor_pos, reaction_dir, perp, index, total, side=-1):
+        """
+        side: -1 для субстратов (назад от anchor), +1 для продуктов (вперёд)
+        """
+
+        lateral_offset = (-(total - 1) / 2.0 + index) * self.markers_dist * 3
+        pos = anchor_pos + side * reaction_dir * self.markers_dist * 2 + perp * lateral_offset
+
+        return pos.tolist()
+
+
+    def _generate_secondary_metabolite_dict(self, bigg_id, name, pos):
+
+        return {
+            "node_type": "metabolite",
+            "bigg_id": bigg_id,
+            "name": name,
+            "node_is_primary": False,
+            "x": pos[0],
+            "y": pos[1],
+            "label_x": pos[0] + self.metabolite_label_shift[0],
+            "label_y": pos[1] + self.metabolite_label_shift[1],
+        }
 
     # scaling and canvas 
 
