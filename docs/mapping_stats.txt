@@ -1,0 +1,52 @@
+
+============================================================
+  METABOLITES (chem_xref)
+============================================================
+  Total rows (KEGG entries): 18323
+  Unique KEGG IDs: 18323
+  Unique MNX IDs: 18166
+  Coverage bigg: 1769/18323 (9.7%)
+  Coverage seed: 15311/18323 (83.6%)
+  Coverage metacyc: 7355/18323 (40.1%)
+  Ambiguous: 1077/18323 (5.9%)
+
+  Ambiguity examples:
+    KEGG=C00341 MNX=MNXM100 bigg=grdp [seed(2)]
+    KEGG=C04448 MNX=MNXM10032 bigg= [seed(2)]
+    KEGG=C18037 MNX=MNXM10301 bigg= [seed(2)]
+    KEGG=C20321 MNX=MNXM10312 bigg= [seed(2)]
+    KEGG=C05663 MNX=MNXM10363 bigg= [kegg(2)]
+
+  Gap examples:
+    KEGG=C16496 MNX=MNXM10006 missing=[bigg]
+    KEGG=C05834 MNX=MNXM10010 missing=[bigg]
+    KEGG=C00835 MNX=MNXM1002 missing=[bigg]
+    KEGG=C04448 MNX=MNXM10032 missing=[bigg]
+    KEGG=C22312 MNX=MNXM10054 missing=[bigg]
+
+============================================================
+  REACTIONS (reac_xref)
+============================================================
+  Total rows (KEGG entries): 11863
+  Unique KEGG IDs: 11863
+  Unique MNX IDs: 11778
+  Coverage bigg: 1740/11863 (14.7%)
+  Coverage seed: 7363/11863 (62.1%)
+  Coverage metacyc: 5165/11863 (43.5%)
+  Coverage rhea: 5067/11863 (42.7%)
+  Coverage ec: 0/11863 (0.0%)
+  Ambiguous: 5752/11863 (48.5%)
+
+  Ambiguity examples:
+    KEGG=R00253 MNX=MNXR100024 bigg=GALh|GALm|GLNS|GLNS_1|R_GALh|R_GALm|R_GLNS|R_GLNS_1 [bigg(8),seed(8),rhea(4)]
+    KEGG=R00256 MNX=MNXR100030 bigg=GAM|GLUN|GLUN_1|GLUNm|GLUNpp|R_GAM|R_GLUN|R_GLUN_1|R_GLUNm|R_GLUNpp [bigg(10),seed(6),metacyc(2),rhea(4)]
+    KEGG=R01333 MNX=MNXR100060 bigg=GCALDD|GCALDDm|R_GCALDD|R_GCALDDm [bigg(4),seed(2),rhea(4)]
+    KEGG=R03824 MNX=MNXR100063 bigg=GCATENEC|LCYB|LYCBC2_h|R_GCATENEC|R_LCYB|R_LYCBC2_h [bigg(6),seed(2),rhea(4)]
+    KEGG=R01698 MNX=MNXR100066 bigg=GCC2cm|PDHcr|PDHe3hr|R_GCC2cm|R_PDHcr|R_PDHe3hr [bigg(6),seed(4),rhea(4)]
+
+  Gap examples:
+    KEGG=R06266 MNX=MNXR101719 missing=[seed]
+    KEGG=R10991 MNX=MNXR103594 missing=[seed]
+    KEGG=R00002 MNX=MNXR106334 missing=[bigg]
+    KEGG=R00008 MNX=MNXR106336 missing=[bigg]
+    KEGG=R00011 MNX=MNXR106337 missing=[bigg]

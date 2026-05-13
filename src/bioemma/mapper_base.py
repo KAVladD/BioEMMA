@@ -13,8 +13,11 @@ class EscherMapper:
                  metabolite_label_shift: list = [10, 10],
                  reaction_label_shift: list = [10, 10],
                  database: str = "BIGG",
+                 remove_orphan_metabolites: bool = False,
                  
                  axis_epsilon: float = 2,):
+        
+        self.DEBUG = True
         
         self.m_mapper = MetaNetXMapper(resource_path("metabolite_mapping.tsv"), "first")
         self.r_mapper = MetaNetXMapper(resource_path("reaction_mapping.tsv"), "first")
@@ -28,6 +31,8 @@ class EscherMapper:
         self.factor = scaling_factor
         self.metabolite_label_shift = metabolite_label_shift
         self.reaction_label_shift = reaction_label_shift
+
+        self.remove_orphan_metabolites = remove_orphan_metabolites
 
         # add to init
         self.h_margin = 100
@@ -56,6 +61,49 @@ class EscherMapper:
             "width": 1000,
             "height": 1000,
         }
+
+    def build_kegg_map(self):
+
+        escher_map = []
+
+        description = self._generate_description("test")
+        escher_map.append(description)
+
+        model = {}
+
+        # prepare all metabolites descriptions
+        m_desc, m2indx_dict = self._prepare_elements_descriptions(self.metabolites, self._generate_metabolite_dict)
+        print(len(m_desc))
+
+        # prepare all reactions descriptions with subnodes
+        r_desc, r2indx_dict = self._prepare_elements_descriptions(self.reactions, self._genarate_reaction_dict)
+        print(r_desc)
+        r_nodes, r2node_dict = self._prepare_reactions_nodes(self.reactions)
+
+        # prepare multimarkers between reactions and metabolites
+        r_mm_nodes, r2mm_node_dict = self._prepare_reactions_multimarkers(self.reactions)
+
+        # compose all nodes
+        global_nodes_idxs = self._make_global_idxs(m2indx_dict, r2node_dict, r2mm_node_dict)
+        all_nodes = self._compose_nodes(global_nodes_idxs, m_desc, r_nodes, r_mm_nodes)
+
+        # update edges
+        r_desc = self._add_edges_to_reactions_descriptions(self.reactions, r_desc, global_nodes_idxs)
+    
+        model["nodes"] = {i:j for i,j in all_nodes.items() if j}
+        
+        model["reactions"] = {r2indx_dict[r]: r_desc[r] for r in r_desc.keys() if r2indx_dict[r]}
+
+        model["text_labels"] = self.text_labels
+        model["canvas"] = self.canvas
+        
+        model["nodes"], model["reactions"] = self._multiply_positions(model["nodes"], model["reactions"])
+        model["canvas"] = self._tune_canvas(model["nodes"], model["canvas"] )
+        model["nodes"], model["reactions"] = self._align_nodes(model["nodes"], model["reactions"], model["canvas"])
+
+        escher_map.append(model)
+
+        return escher_map
 
     def build_map(self, cobra_model):
 
@@ -87,6 +135,9 @@ class EscherMapper:
         cobra_model_metabolites, anti_metabolites, cobra_model_reactions, anti_reactions = self._parse_model(cobra_model, m_desc, r_nodes)
         all_nodes, r2indx_dict = self._subtract_not_in_model_reactions(global_nodes_idxs, all_nodes, anti_reactions, r2indx_dict)
         all_nodes = self._subtract_not_in_model_metabolites(global_nodes_idxs, all_nodes, anti_metabolites)
+
+        if self.remove_orphan_metabolites:
+            all_nodes = self._remove_orphan_metabolites(all_nodes, r_desc, r2indx_dict)
 
         # побочные метаболиты
         secondary_data = self._extract_secondary_metabolites(cobra_model_reactions)
@@ -164,7 +215,7 @@ class EscherMapper:
         if self.DB == "BIGG":
             id = ids["BIGG"]
         elif self.DB == "SEED":
-            id = ids["SEED"]
+            id = str(ids["SEED"]) + "_c0"
         elif self.DB == "KEGG":
             id = ids["KEGG"]
 
@@ -597,31 +648,33 @@ class EscherMapper:
 
     def _extract_model_metabolites(self, model, m_nodes):
 
-        ms_names = {"KEGG": set(), "BIGG": set(), "SEED": set()}
+        # собираем все id из модели один раз
+        model_ids = {"KEGG": set(), "BIGG": set(), "SEED": set()}
+
+        for met in model.metabolites:
+            for k in model_ids.keys():
+                key = f'{k.lower()}.{"metabolite" if k == "BIGG" else "compound"}'
+                names = met.annotation.get(key, [])
+                names = names if isinstance(names, list) else [names]
+                model_ids[k] |= set(names)
+
+        # проверяем каждый метаболит карты
         ms = {}
         anti_ms = []
 
-        for _, r in enumerate(model.metabolites):
+        for m_name in m_nodes.keys():
 
-            for k in ms_names.keys():
+            keggs = {m_name}
+            biggs = set(self.m_mapper[m_name].bigg_all) if self.m_mapper.get(m_name) else set()
+            seeds = set(self.m_mapper[m_name].seed_all) if self.m_mapper.get(m_name) else set()
 
-                names = r.annotation.get(f'{k.lower()}.{"metabolite" if k=="BIGG" else "compound"}')
-                names = names if type(names) is list else [names]
-            
-                ms_names[k] |= set(names)
-
-            for m in m_nodes.keys():
-
-                keggs = set([m])
-                biggs = set(self.m_mapper[m].bigg_all) if self.r_mapper.get(m) else set()
-                seeds = set(self.m_mapper[m].seed_all) if self.r_mapper.get(m) else set()
-
-                
-                if not (keggs & ms_names["KEGG"] or biggs & ms_names["BIGG"] or seeds & ms_names["SEED"]):
-                    ms[m] = r
-                    break
+            if keggs & model_ids["KEGG"] or biggs & model_ids["BIGG"] or seeds & model_ids["SEED"]:
+                if m_name in ("C00103", "C15972", "C15973", "C01159"):
+                    print(f"MATCHED {m_name}: kegg={keggs & model_ids['KEGG']}, bigg={biggs & model_ids['BIGG']}, seed={seeds & model_ids['SEED']}")
+        
+                ms[m_name] = True
             else:
-                anti_ms.append(m)
+                anti_ms.append(m_name)
 
         return ms, anti_ms
     
@@ -814,12 +867,29 @@ class EscherMapper:
             "label_x": pos[0] + self.metabolite_label_shift[0],
             "label_y": pos[1] + self.metabolite_label_shift[1],
         }
+    
+    def _remove_orphan_metabolites(self, all_nodes, r_desc, r2indx_dict):
+
+        referenced_nodes = set()
+        for r_name, r_data in r_desc.items():
+            if r2indx_dict.get(r_name) is None:
+                continue
+            for seg in r_data["segments"].values():
+                referenced_nodes.add(seg["from_node_id"])
+                referenced_nodes.add(seg["to_node_id"])
+
+        for nid, node in all_nodes.items():
+            if node and node.get("node_type") == "metabolite" and node.get("node_is_primary") and nid not in referenced_nodes:
+                all_nodes[nid] = None
+
+        return all_nodes
 
     # scaling and canvas 
 
     def _tune_canvas(self, nodes, canvas):
 
         x, y = 0, 0
+        min_x, min_y = 0, 0
 
         for i, compound_dict in nodes.items():
 
@@ -833,8 +903,13 @@ class EscherMapper:
                 if y < float(compound_dict["y"]):
                     y = float(compound_dict["y"])
 
-        canvas["width"] = x + self.h_margin
-        canvas["height"] = y + self.w_margin
+                if min_x > float(compound_dict["x"]):
+                    min_x = float(compound_dict["x"])
+                if min_y > float(compound_dict["y"]):
+                    min_y = float(compound_dict["y"])
+
+        canvas["width"] = x - min_x + self.h_margin
+        canvas["height"] = y - min_y + self.w_margin
 
         return canvas
 
@@ -895,35 +970,16 @@ class EscherMapper:
 
     def _current_center(self, nodes, reactions):
 
-        x, y = 0, 0
-        n_x, n_y = 0, 0
+        min_x, min_y = float('inf'), float('inf')
+        max_x, max_y = float('-inf'), float('-inf')
 
         for node in nodes.values():
-
             if not node:
                 continue
+            min_x = min(min_x, float(node["x"]))
+            max_x = max(max_x, float(node["x"]))
+            min_y = min(min_y, float(node["y"]))
+            max_y = max(max_y, float(node["y"]))
 
-            x += float(node["x"])
-            y += float(node["y"])
-            n_x += 1
-            n_y += 1
-
-            if "label_x" in node.keys():
-
-                x += float(node["label_x"])
-                y += float(node["label_y"])
-                n_x += 1
-                n_y += 1
-
-        for reaction in reactions.values():
-
-            if not reaction:
-                continue
-
-            x += float(reaction["label_x"])
-            y += float(reaction["label_y"])
-            n_x += 1
-            n_y += 1
-
-        return x/n_x, y/n_y
+        return (min_x + max_x) / 2, (min_y + max_y) / 2
     
