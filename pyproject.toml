@@ -16,6 +16,9 @@ dependencies = [
   "lxml"
 ]
 
+[project.scripts]
+bioemma = "bioemma.cli:main"
+
 [tool.setuptools.packages.find]
 where = ["src"]
 
