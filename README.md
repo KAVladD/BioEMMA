@@ -68,6 +68,14 @@ These files are derived from MetaNetX cross-reference tables and are used to
 map KEGG identifiers to BiGG and SEED identifiers. The large raw MetaNetX
 download cache is not intended to be included in the Python package.
 
+See `NOTICE.md` for third-party data attribution and usage notes.
+
+## License
+
+BioEMMA's source code is distributed under the MIT License. Bundled mapping
+data are derived from third-party database resources and may be subject to
+their own license terms. See `LICENSE` and `NOTICE.md`.
+
 ## Development Notes
 
 The package code lives in:

@@ -9,6 +9,7 @@ description = "Tools for building Escher-compatible metabolic maps from KEGG and
 readme = "README.md"
 requires-python = ">=3.10"
 license = "MIT"
+license-files = ["LICENSE", "NOTICE.md"]
 dependencies = [
   "numpy",
   "beautifulsoup4",
