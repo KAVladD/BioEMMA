@@ -4,7 +4,7 @@
 Использование:
     from metanetx_mapper import MetaNetXMapper
 
-    mapper = MetaNetXMapper("mapping_output/metabolite_mapping.tsv")
+    mapper = MetaNetXMapper("resources/metabolite_mapping.tsv")
 
     # Получить BiGG id по KEGG
     mapper["C00001"].bigg        # "h2o"
@@ -26,12 +26,20 @@
     # Стратегии разрешения неоднозначностей
     mapper = MetaNetXMapper("metabolite_mapping.tsv", ambiguity="first")   # первый (дефолт)
     mapper = MetaNetXMapper("metabolite_mapping.tsv", ambiguity="shortest") # самый короткий id
-    mapper = MetaNetXMapper("metabolite_mapping.tsv", ambiguity="manual", 
+    mapper = MetaNetXMapper("metabolite_mapping.tsv", ambiguity="manual",
                             overrides={"C00341": {"bigg": "grdp"}})
 
-    # Реакции — точно так же
-    rxn_mapper = MetaNetXMapper("mapping_output/reaction_mapping.tsv")
-    rxn_mapper["R00200"].bigg    # "PFK"
+    # Реакции — точно так же, теперь с EC номерами
+    rxn_mapper = MetaNetXMapper("resources/reaction_mapping.tsv")
+    rxn_mapper["R00200"].bigg          # "PFK"
+    rxn_mapper["R00200"].ec            # "2.7.1.11"
+    rxn_mapper["R00200"].ec_all        # ["2.7.1.11"]
+    rxn_mapper["R00200"].is_ec_fallback # False (прямой маппинг)
+
+    # EC-фоллбэк: если BiGG не найден через MNX напрямую,
+    # маппер подхватывает bigg из колонки, заполненной через EC
+    rxn_mapper["R12345"].bigg            # "SOME_RXN" (найдено через EC)
+    rxn_mapper["R12345"].is_ec_fallback  # True
 """
 
 from __future__ import annotations
@@ -50,8 +58,10 @@ class MappingEntry:
     _seed_all: list[str] = field(default_factory=list)
     _metacyc_all: list[str] = field(default_factory=list)
     _rhea_all: list[str] = field(default_factory=list)
+    _ec_all: list[str] = field(default_factory=list)
     description: str = ""
     ambiguous: str = ""
+    _is_ec_fallback: bool = False
 
     # --- Резолверы (устанавливаются маппером) ---
     _resolved_bigg: Optional[str] = field(default=None, repr=False)
@@ -76,6 +86,20 @@ class MappingEntry:
     @property
     def rhea(self) -> str:
         return self._resolved_rhea or ""
+
+    @property
+    def ec(self) -> str:
+        """EC номер(а) — pipe-separated если несколько."""
+        return "|".join(self._ec_all) if self._ec_all else ""
+
+    @property
+    def ec_all(self) -> list[str]:
+        return self._ec_all
+
+    @property
+    def is_ec_fallback(self) -> bool:
+        """True если BiGG маппинг получен через EC-фоллбэк, а не напрямую через MNX."""
+        return self._is_ec_fallback
 
     # -- Все варианты --
 
@@ -111,18 +135,24 @@ class MappingEntry:
             "seed": self.seed,
             "metacyc": self.metacyc,
             "rhea": self.rhea,
+            "ec": self.ec,
             "bigg_all": self._bigg_all,
             "seed_all": self._seed_all,
+            "ec_all": self._ec_all,
             "description": self.description,
             "ambiguous": self.ambiguous,
+            "is_ec_fallback": self._is_ec_fallback,
         }
 
     def __str__(self):
         parts = [f"KEGG:{self.kegg}", f"MNX:{self.mnx_id}"]
         if self.bigg:
-            parts.append(f"BiGG:{self.bigg}")
+            fb = " [EC-fb]" if self._is_ec_fallback else ""
+            parts.append(f"BiGG:{self.bigg}{fb}")
         if self.seed:
             parts.append(f"SEED:{self.seed}")
+        if self.ec:
+            parts.append(f"EC:{self.ec}")
         if self.description:
             parts.append(f'"{self.description}"')
         if self.is_ambiguous:
@@ -215,6 +245,9 @@ class MetaNetXMapper:
                 if not kegg:
                     continue
 
+                ambiguous_val = row.get("ambiguous", "").strip()
+                is_ec_fb = "ec_fallback" in ambiguous_val
+
                 entry = MappingEntry(
                     kegg=kegg,
                     mnx_id=row.get("mnx_id", "").strip(),
@@ -222,15 +255,17 @@ class MetaNetXMapper:
                     _seed_all=self._parse_pipe_list(row.get("seed", "")),
                     _metacyc_all=self._parse_pipe_list(row.get("metacyc", "")),
                     _rhea_all=self._parse_pipe_list(row.get("rhea", "")),
+                    _ec_all=self._parse_pipe_list(row.get("ec", "")),
                     description=row.get("description", "").strip(),
-                    ambiguous=row.get("ambiguous", "").strip(),
+                    ambiguous=ambiguous_val,
+                    _is_ec_fallback=is_ec_fb,
                 )
 
-                # Если KEGG id уже есть — мержим списки (разные MNX могут
-                # маппиться на один KEGG, хотя редко)
+                # Если KEGG id уже есть — мержим списки
                 if kegg in self._data:
                     existing = self._data[kegg]
-                    for attr in ("_bigg_all", "_seed_all", "_metacyc_all", "_rhea_all"):
+                    for attr in ("_bigg_all", "_seed_all", "_metacyc_all",
+                                 "_rhea_all", "_ec_all"):
                         merged = list(dict.fromkeys(
                             getattr(existing, attr) + getattr(entry, attr)
                         ))
@@ -239,6 +274,8 @@ class MetaNetXMapper:
                         existing.description = entry.description
                     if entry.ambiguous:
                         existing.ambiguous = entry.ambiguous
+                    if entry._is_ec_fallback:
+                        existing._is_ec_fallback = True
                 else:
                     self._data[kegg] = entry
 
@@ -292,6 +329,10 @@ class MetaNetXMapper:
         """Возвращает все записи с неоднозначностями."""
         return [e for e in self._data.values() if e.is_ambiguous]
 
+    def ec_fallback_entries(self) -> list[MappingEntry]:
+        """Возвращает записи, где BiGG получен через EC-фоллбэк."""
+        return [e for e in self._data.values() if e._is_ec_fallback]
+
     def missing_bigg(self) -> list[MappingEntry]:
         """KEGG ID без маппинга на BiGG."""
         return [e for e in self._data.values() if not e.bigg]
@@ -299,6 +340,10 @@ class MetaNetXMapper:
     def missing_seed(self) -> list[MappingEntry]:
         """KEGG ID без маппинга на SEED."""
         return [e for e in self._data.values() if not e.seed]
+
+    def lookup_by_ec(self, ec_number: str) -> list[MappingEntry]:
+        """Поиск записей по EC номеру."""
+        return [e for e in self._data.values() if ec_number in e._ec_all]
 
     def coverage_stats(self) -> dict:
         """Статистика покрытия."""
@@ -310,6 +355,8 @@ class MetaNetXMapper:
             "has_bigg": sum(1 for e in self._data.values() if e.bigg),
             "has_seed": sum(1 for e in self._data.values() if e.seed),
             "has_metacyc": sum(1 for e in self._data.values() if e.metacyc),
+            "has_ec": sum(1 for e in self._data.values() if e.ec),
+            "ec_fallback": sum(1 for e in self._data.values() if e._is_ec_fallback),
             "ambiguous": sum(1 for e in self._data.values() if e.is_ambiguous),
             "bigg_pct": sum(1 for e in self._data.values() if e.bigg) / total * 100,
             "seed_pct": sum(1 for e in self._data.values() if e.seed) / total * 100,
@@ -317,8 +364,8 @@ class MetaNetXMapper:
 
     def reverse_lookup(self, db: str, ext_id: str) -> list[MappingEntry]:
         """
-        Обратный поиск: по BiGG/SEED id найти KEGG.
-        db: "bigg", "seed", "metacyc", "rhea"
+        Обратный поиск: по BiGG/SEED/EC id найти KEGG.
+        db: "bigg", "seed", "metacyc", "rhea", "ec"
         """
         attr = f"_{db}_all"
         results = []
@@ -329,11 +376,14 @@ class MetaNetXMapper:
 
     def __repr__(self):
         stats = self.coverage_stats()
+        ec_fb = stats.get('ec_fallback', 0)
+        ec_part = f", ec_fallback={ec_fb}" if ec_fb else ""
         return (
             f"MetaNetXMapper({self._filepath!r}, "
             f"entries={stats.get('total', 0)}, "
             f"bigg={stats.get('bigg_pct', 0):.0f}%, "
-            f"seed={stats.get('seed_pct', 0):.0f}%, "
+            f"seed={stats.get('seed_pct', 0):.0f}%"
+            f"{ec_part}, "
             f"ambiguity={self._ambiguity!r})"
         )
 
@@ -359,6 +409,12 @@ if __name__ == "__main__":
     print(f"\nАмбигов: {len(mapper.ambiguous_entries())}")
     for e in mapper.ambiguous_entries()[:10]:
         print(f"  {e}")
+
+    ec_fb = mapper.ec_fallback_entries()
+    if ec_fb:
+        print(f"\nEC-фоллбэк: {len(ec_fb)} записей")
+        for e in ec_fb[:10]:
+            print(f"  {e}")
 
     print(f"\nПримеры:")
     for kid in list(mapper.keys())[:15]:

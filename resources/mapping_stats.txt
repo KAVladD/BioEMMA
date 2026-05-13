@@ -2,50 +2,51 @@
 ============================================================
   METABOLITES (chem_xref)
 ============================================================
-  Всего строк (KEGG entries): 18323
-  Уникальных KEGG ID: 18323
-  Уникальных MNX ID: 18166
-  Покрытие bigg: 1769/18323 (9.7%)
-  Покрытие seed: 15311/18323 (83.6%)
-  Покрытие metacyc: 7355/18323 (40.1%)
-  С неоднозначностями: 1077/18323 (5.9%)
+  Total rows (KEGG entries): 18323
+  Unique KEGG IDs: 18323
+  Unique MNX IDs: 18166
+  Coverage bigg: 1769/18323 (9.7%)
+  Coverage seed: 15311/18323 (83.6%)
+  Coverage metacyc: 7355/18323 (40.1%)
+  Ambiguous: 1077/18323 (5.9%)
 
-  Примеры неоднозначностей:
-    KEGG=C00341 MNX=MNXM100 bigg=grdp seed=cpd00283|cpd03476 [seed(2)]
-    KEGG=C04448 MNX=MNXM10032 bigg= seed=cpd12548|cpd27224 [seed(2)]
-    KEGG=C18037 MNX=MNXM10301 bigg= seed=cpd18020|cpd30776 [seed(2)]
-    KEGG=C20321 MNX=MNXM10312 bigg= seed=cpd25375|cpd31030 [seed(2)]
-    KEGG=C05663 MNX=MNXM10363 bigg= seed=cpd03373 [kegg(2)]
+  Ambiguity examples:
+    KEGG=C00341 MNX=MNXM100 bigg=grdp [seed(2)]
+    KEGG=C04448 MNX=MNXM10032 bigg= [seed(2)]
+    KEGG=C18037 MNX=MNXM10301 bigg= [seed(2)]
+    KEGG=C20321 MNX=MNXM10312 bigg= [seed(2)]
+    KEGG=C05663 MNX=MNXM10363 bigg= [kegg(2)]
 
-  Примеры пробелов:
-    KEGG=C16496 MNX=MNXM10006 missing=[bigg] desc=3-Epiecdysone
-    KEGG=C05834 MNX=MNXM10010 missing=[bigg] desc=3-Methyldioxyindole||3-Hydroxy-3-methyloxindole
-    KEGG=C00835 MNX=MNXM1002 missing=[bigg] desc=Sepiapterin
-    KEGG=C04448 MNX=MNXM10032 missing=[bigg] desc=3-Hydroxymethyl ceph-3-em-4-carboxylate
-    KEGG=C22312 MNX=MNXM10054 missing=[bigg] desc=3-Sulfanylpropanoate||3-Mercaptopropanoic acid||3-
+  Gap examples:
+    KEGG=C16496 MNX=MNXM10006 missing=[bigg]
+    KEGG=C05834 MNX=MNXM10010 missing=[bigg]
+    KEGG=C00835 MNX=MNXM1002 missing=[bigg]
+    KEGG=C04448 MNX=MNXM10032 missing=[bigg]
+    KEGG=C22312 MNX=MNXM10054 missing=[bigg]
 
 ============================================================
   REACTIONS (reac_xref)
 ============================================================
-  Всего строк (KEGG entries): 11863
-  Уникальных KEGG ID: 11863
-  Уникальных MNX ID: 11778
-  Покрытие bigg: 1740/11863 (14.7%)
-  Покрытие seed: 7363/11863 (62.1%)
-  Покрытие metacyc: 5165/11863 (43.5%)
-  Покрытие rhea: 5067/11863 (42.7%)
-  С неоднозначностями: 5752/11863 (48.5%)
+  Total rows (KEGG entries): 11863
+  Unique KEGG IDs: 11863
+  Unique MNX IDs: 11778
+  Coverage bigg: 1740/11863 (14.7%)
+  Coverage seed: 7363/11863 (62.1%)
+  Coverage metacyc: 5165/11863 (43.5%)
+  Coverage rhea: 5067/11863 (42.7%)
+  Coverage ec: 0/11863 (0.0%)
+  Ambiguous: 5752/11863 (48.5%)
 
-  Примеры неоднозначностей:
-    KEGG=R00253 MNX=MNXR100024 bigg=GALh|GALm|GLNS|GLNS_1|R_GALh|R_GALm|R_GLNS|R_GLNS_1 seed=rxn00187|rxn19835|rxn19836|rxn30022|rxn33952|rxn33953|rxn34791|rxn34792 [bigg(8),seed(8),rhea(4)]
-    KEGG=R00256 MNX=MNXR100030 bigg=GAM|GLUN|GLUN_1|GLUNm|GLUNpp|R_GAM|R_GLUN|R_GLUN_1|R_GLUNm|R_GLUNpp seed=rxn00189|rxn19831|rxn29962|rxn30024|rxn30680|rxn34787 [bigg(10),seed(6),metacyc(2),rhea(4)]
-    KEGG=R01333 MNX=MNXR100060 bigg=GCALDD|GCALDDm|R_GCALDD|R_GCALDDm seed=rxn00979|rxn31785 [bigg(4),seed(2),rhea(4)]
-    KEGG=R03824 MNX=MNXR100063 bigg=GCATENEC|LCYB|LYCBC2_h|R_GCATENEC|R_LCYB|R_LYCBC2_h seed=rxn11574|rxn26506 [bigg(6),seed(2),rhea(4)]
-    KEGG=R01698 MNX=MNXR100066 bigg=GCC2cm|PDHcr|PDHe3hr|R_GCC2cm|R_PDHcr|R_PDHe3hr seed=rxn01241|rxn27791|rxn27792|rxn38078 [bigg(6),seed(4),rhea(4)]
+  Ambiguity examples:
+    KEGG=R00253 MNX=MNXR100024 bigg=GALh|GALm|GLNS|GLNS_1|R_GALh|R_GALm|R_GLNS|R_GLNS_1 [bigg(8),seed(8),rhea(4)]
+    KEGG=R00256 MNX=MNXR100030 bigg=GAM|GLUN|GLUN_1|GLUNm|GLUNpp|R_GAM|R_GLUN|R_GLUN_1|R_GLUNm|R_GLUNpp [bigg(10),seed(6),metacyc(2),rhea(4)]
+    KEGG=R01333 MNX=MNXR100060 bigg=GCALDD|GCALDDm|R_GCALDD|R_GCALDDm [bigg(4),seed(2),rhea(4)]
+    KEGG=R03824 MNX=MNXR100063 bigg=GCATENEC|LCYB|LYCBC2_h|R_GCATENEC|R_LCYB|R_LYCBC2_h [bigg(6),seed(2),rhea(4)]
+    KEGG=R01698 MNX=MNXR100066 bigg=GCC2cm|PDHcr|PDHe3hr|R_GCC2cm|R_PDHcr|R_PDHe3hr [bigg(6),seed(4),rhea(4)]
 
-  Примеры пробелов:
-    KEGG=R06266 MNX=MNXR101719 missing=[seed] desc=magnesium-protoporphyrin-IX 13-monomethyl ester,NA
-    KEGG=R10991 MNX=MNXR103594 missing=[seed] desc=2-aminobutanoate:2-oxoglutarate aminotransferase||
-    KEGG=R00002 MNX=MNXR106334 missing=[bigg] desc=reduced ferredoxin:dinitrogen oxidoreductase (ATP-
-    KEGG=R00008 MNX=MNXR106336 missing=[bigg] desc=4-hydroxy-4-methyl-2-oxoglutarate pyruvate-lyase (
-    KEGG=R00011 MNX=MNXR106337 missing=[bigg] desc=Mn(II):hydrogen-peroxide oxidoreductase||2 Mangane
+  Gap examples:
+    KEGG=R06266 MNX=MNXR101719 missing=[seed]
+    KEGG=R10991 MNX=MNXR103594 missing=[seed]
+    KEGG=R00002 MNX=MNXR106334 missing=[bigg]
+    KEGG=R00008 MNX=MNXR106336 missing=[bigg]
+    KEGG=R00011 MNX=MNXR106337 missing=[bigg]
