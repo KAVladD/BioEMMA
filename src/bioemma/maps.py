@@ -2,9 +2,9 @@ import pathlib
 from urllib.request import urlretrieve
 
 from bs4 import BeautifulSoup
-from bidict import bidict
 
-from utils.metanetx_mapper import MetaNetXMapper
+from bioemma.metanetx_mapper import MetaNetXMapper
+from bioemma._resources import resource_path
 
 class KeggMap():
 
@@ -15,8 +15,8 @@ class KeggMap():
                  reaction_positions: dict = {}
                  ) -> None:
         
-        self.m_mapper = MetaNetXMapper("resources/metabolite_mapping.tsv", "first")
-        self.r_mapper = MetaNetXMapper("resources/reaction_mapping.tsv", "first")
+        self.m_mapper = MetaNetXMapper(resource_path("metabolite_mapping.tsv"), "first")
+        self.r_mapper = MetaNetXMapper(resource_path("reaction_mapping.tsv"), "first")
 
         self.reset()
 
@@ -39,7 +39,7 @@ class KeggMap():
         self._get_reactions_from_xml(kegg_xml)
         self._get_reaction_details_from_xml(kegg_xml)
 
-        self.r_k2b, self.r_k2s = self._get_reactions_annotations("00010")
+        #self.r_k2b, self.r_k2s = self._get_reactions_annotations("00010")
 
     def read_from_url(self, url):
 
@@ -176,50 +176,50 @@ class KeggMap():
             for r in self.reactions
         }
 
-        print(self.r_k2b, self.r_k2s)
+        #print(self.r_k2b, self.r_k2s)
 
         return reactions
     
     # annotations
 
-    def _get_reactions_annotations(self, kegg_map_id):
+    # def _get_reactions_annotations(self, kegg_map_id):
 
-        with open(f"resources/BIGG/map{kegg_map_id}.tsv") as f:
+    #     with open(f"resources/BIGG/map{kegg_map_id}.tsv") as f:
 
-            data = f.readlines()
-            kegg2bigg = {}
+    #         data = f.readlines()
+    #         kegg2bigg = {}
 
-            for line in data[1:]:
+    #         for line in data[1:]:
 
-                if not line:
-                    continue
+    #             if not line:
+    #                 continue
 
-                ids = line.split()
-                kegg = ids[1].split(";")
-                bigg = ids[0]
+    #             ids = line.split()
+    #             kegg = ids[1].split(";")
+    #             bigg = ids[0]
 
-                kegg2bigg |= {k: bigg for k in kegg}
+    #             kegg2bigg |= {k: bigg for k in kegg}
 
-        with open(f"resources/SEED/map{kegg_map_id}.tsv") as f:
+    #     with open(f"resources/SEED/map{kegg_map_id}.tsv") as f:
 
-            data = f.readlines()
-            kegg2seed = {}
+    #         data = f.readlines()
+    #         kegg2seed = {}
 
-            for line in data[1:]:
+    #         for line in data[1:]:
 
-                if not line:
-                    continue
+    #             if not line:
+    #                 continue
 
-                ids = line.split()
-                if len(ids) == 2:
-                    kegg = ids[1].split(";")
-                else:
-                    kegg = ids[2].split(";")
-                seed = ids[0]
+    #             ids = line.split()
+    #             if len(ids) == 2:
+    #                 kegg = ids[1].split(";")
+    #             else:
+    #                 kegg = ids[2].split(";")
+    #             seed = ids[0]
 
-                kegg2seed |= {k: seed for k in kegg}
+    #             kegg2seed |= {k: seed for k in kegg}
 
-        return kegg2bigg, kegg2seed
+    #     return kegg2bigg, kegg2seed
 
 
 if __name__ == "__main__":

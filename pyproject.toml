@@ -1,0 +1,23 @@
+[build-system]
+requires = ["setuptools >= 77.0.3"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "bioemma"
+version = "0.1.0"
+description = "Tools for building Escher-compatible metabolic maps from KEGG and model annotations"
+readme = "README.md"
+requires-python = ">=3.10"
+license = "MIT"
+dependencies = [
+  "numpy",
+  "beautifulsoup4",
+  "cobra",
+  "lxml"
+]
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.setuptools.package-data]
+bioemma = ["resources/*.tsv"]

@@ -1,6 +1,7 @@
 import numpy as np
 
-from utils.metanetx_mapper import MetaNetXMapper
+from bioemma.metanetx_mapper import MetaNetXMapper
+from bioemma._resources import resource_path
 
 class EscherMapper:
 
@@ -15,8 +16,8 @@ class EscherMapper:
                  
                  axis_epsilon: float = 2,):
         
-        self.m_mapper = MetaNetXMapper("resources/metabolite_mapping.tsv", "first")
-        self.r_mapper = MetaNetXMapper("resources/reaction_mapping.tsv", "first")
+        self.m_mapper = MetaNetXMapper(resource_path("metabolite_mapping.tsv"), "first")
+        self.r_mapper = MetaNetXMapper(resource_path("reaction_mapping.tsv"), "first")
 
         self.metabolites = metabolites
         self.reactions = reactions
