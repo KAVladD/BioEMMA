@@ -9,6 +9,8 @@ The current main workflow is:
 2. Convert KEGG compounds and reactions to BiGG/SEED identifiers using bundled
    MetaNetX-derived mapping tables.
 3. Build an Escher JSON map with `EscherMapper`.
+4. Optionally save a reproducible workflow output directory with the Escher map,
+   the reconstructed KEGG map, flux data, summaries, and merged maps.
 
 The project is currently in alpha. The public API may still change while the
 package structure is being prepared for PyPI.
@@ -29,33 +31,95 @@ pip install -r requirements.txt
 
 ## Basic Usage
 
+The workflow API is the recommended user-facing entry point. It accepts a COBRA
+model path (or an in-memory `cobra.Model`) and either a KEGG pathway identifier
+or a local KGML file.
+
 ```python
-import cobra
-
-from bioemma import KeggMap, EscherMapper
+from bioemma.workflow import build_outputs
 
 
-kegg_map = KeggMap()
-
-with open("path/to/rn00010.xml", "r", encoding="utf-8") as file:
-    kegg_map.read_from_file(file)
-
-metabolites = kegg_map.get_metabolites()
-reactions = kegg_map.get_reactions()
-
-model = cobra.io.read_sbml_model("path/to/model.xml")
-
-mapper = EscherMapper(
-    metabolites=metabolites,
-    reactions=reactions,
+result = build_outputs(
+    model="path/to/model.xml",
+    pathway="rn00010",
+    output_dir="out",
     database="BIGG",
+    run_fba=True,
 )
 
-escher_map = mapper.build_map(model)
+escher_map = result.escher_map
+kegg_reconstruction = result.kegg_reconstruction
 ```
 
-`escher_map` is a Python object compatible with the Escher JSON map structure.
-It can be serialized with `json.dump`.
+`escher_map` is a Python object compatible with the Escher JSON map structure,
+and `kegg_reconstruction` is a normalized analytical representation of the KEGG
+layout and mapped identifiers.
+
+With `output_dir`, BioEMMA writes:
+
+```text
+out/rn00010/
+  map.json
+  kegg_reconstruction.json
+  summary.json
+  fluxes.json              # when fluxes are provided or run_fba=True
+  map.html                 # when save_html=True or save_png=True
+  map.png                  # when save_png=True
+  map_with_fluxes.html     # when flux data and HTML/PNG output are requested
+  map_with_fluxes.png      # when flux data and PNG output are requested
+```
+
+HTML output requires the `escher` package. PNG output additionally requires
+`playwright` and a browser installed for Playwright. These visualization
+dependencies are not installed automatically by BioEMMA.
+
+## Command Line Usage
+
+Build one map from a KEGG pathway identifier:
+
+```bash
+bioemma build --model path/to/model.xml --pathway rn00010 --output-dir out
+```
+
+Build one map from a local KGML file:
+
+```bash
+bioemma build --model path/to/model.xml --kgml path/to/rn00010.xml --output-dir out
+```
+
+Build multiple maps and merge them:
+
+```bash
+bioemma build --model path/to/model.xml --pathway rn00010 rn00020 --output-dir out
+```
+
+The same works with local KGML files:
+
+```bash
+bioemma build --model path/to/model.xml --kgml path/to/rn00010.xml path/to/rn00020.xml --output-dir out
+```
+
+For multiple inputs, BioEMMA writes each individual map into its own subfolder
+and writes a merged Escher map at:
+
+```text
+out/merged_map.json
+```
+
+Use `--no-merge` to skip the merged map.
+
+The legacy single-file JSON output is still available:
+
+```bash
+bioemma build --model path/to/model.xml --kgml path/to/rn00010.xml --output map.json
+```
+
+If cobrapy cannot access its default cache directory on Windows, set a local
+cache directory before running tests or CLI commands:
+
+```cmd
+set BIOEMMA_COBRA_CACHE_DIR=%CD%\.cobra-cache
+```
 
 ## Included Mapping Data
 
@@ -90,6 +154,8 @@ The current core modules are:
 - `bioemma.mapper_base.EscherMapper`
 - `bioemma.metanetx_mapper.MetaNetXMapper`
 - `bioemma.merger.EscherMerger`
+- `bioemma.workflow.build_outputs`
+- `bioemma.workflow.build_many_outputs`
 
 The script for regenerating mapping tables is kept separately in:
 
@@ -97,9 +163,42 @@ The script for regenerating mapping tables is kept separately in:
 scripts/prepare_db_mapping.py
 ```
 
+Run the test suite from a source checkout with:
+
+```cmd
+set PYTHONPATH=%CD%\src
+set BIOEMMA_COBRA_CACHE_DIR=%CD%\.pytest-cobra-cache
+python -m pytest -q
+```
+
+## Publishing
+
+Before publishing, bump the version in `pyproject.toml`, run tests, and build
+fresh distribution artifacts:
+
+```cmd
+python -m pip install --upgrade build twine
+rmdir /s /q dist
+python -m build
+python -m twine check dist/*
+```
+
+Upload to TestPyPI first:
+
+```cmd
+python -m twine upload --repository testpypi dist/*
+```
+
+Install from TestPyPI in a clean environment and smoke-test the CLI. Then upload
+the same checked artifacts to PyPI:
+
+```cmd
+python -m twine upload dist/*
+```
+
 ## Status
 
 BioEMMA is not yet a stable release. Before publishing to PyPI, the package
-still needs packaging metadata, tests, and a final check of bundled data and
-license compatibility.
+still needs a final check of bundled data, license compatibility, and user-facing
+visualization dependencies.
 
