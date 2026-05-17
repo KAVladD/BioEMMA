@@ -1,5 +1,4 @@
-import pathlib
-from urllib.request import urlretrieve
+from urllib.request import urlopen
 
 from bs4 import BeautifulSoup
 
@@ -9,10 +8,10 @@ from bioemma._resources import resource_path
 class KeggMap():
 
     def __init__(self, 
-                 metabolites: list = [], 
-                 metabolites_positions: dict = {},
-                 reactions: list = [], 
-                 reaction_positions: dict = {}
+                 metabolites: list | None = None, 
+                 metabolites_positions: dict | None = None,
+                 reactions: list | None = None, 
+                 reaction_positions: dict | None = None
                  ) -> None:
         
         self.m_mapper = MetaNetXMapper(resource_path("metabolite_mapping.tsv"), "first")
@@ -20,10 +19,10 @@ class KeggMap():
 
         self.reset()
 
-        self.metabolites = metabolites
-        self.metabolites_positions = metabolites_positions
-        self.reactions = reactions
-        self.reaction_positions = reaction_positions 
+        self.metabolites = list(metabolites) if metabolites is not None else []
+        self.metabolites_positions = dict(metabolites_positions) if metabolites_positions is not None else {}
+        self.reactions = list(reactions) if reactions is not None else []
+        self.reaction_positions = dict(reaction_positions) if reaction_positions is not None else {}
 
         self.reaction_substrates = {}  
         self.reaction_products = {}    
@@ -43,10 +42,9 @@ class KeggMap():
 
     def read_from_url(self, url):
 
-        urlretrieve(url, "temp.xml")
-
-        with open("temp.xml", "r") as f:
-            self.read_from_file(f)
+        with urlopen(url) as response:
+            kgml_text = response.read().decode("utf-8")
+        self.read_from_file(kgml_text)
 
     def _get_metabolites_from_xml(self, xml):
 
@@ -66,22 +64,23 @@ class KeggMap():
         entrys = xml.find_all("entry", type="reaction")
         for entry in entrys:
             entry_graphics = entry.graphics
+            reactions = entry.get("reaction")
 
-            reactions = entry["reaction"]
+            if not entry_graphics or not reactions:
+                continue
 
             for reaction in reactions.split():
+                parts = reaction.split(":", 1)
+                if len(parts) != 2:
+                    continue
 
-                try:
-
-                    reaction_name = reaction.split(":")[1]
-                    reaction_pos = (entry_graphics["x"],
-                                    entry_graphics["y"])
-                    
-                    if reaction_name not in self.reactions:
-                        self.reactions.append(reaction_name)
-                    self.reaction_positions[reaction_name] = reaction_pos
-                except:
-                    pass
+                reaction_name = parts[1]
+                reaction_pos = (entry_graphics["x"],
+                                entry_graphics["y"])
+                
+                if reaction_name not in self.reactions:
+                    self.reactions.append(reaction_name)
+                self.reaction_positions[reaction_name] = reaction_pos
 
     def _get_reaction_details_from_xml(self, xml):
 
@@ -175,9 +174,6 @@ class KeggMap():
             }
             for r in self.reactions
         }
-
-        #print(self.r_k2b, self.r_k2s)
-
         return reactions
     
     # annotations

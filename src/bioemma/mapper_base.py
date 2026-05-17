@@ -10,14 +10,12 @@ class EscherMapper:
                  reactions: dict,
                  markers_dist: int = 10,
                  scaling_factor: float = 4,
-                 metabolite_label_shift: list = [10, 10],
-                 reaction_label_shift: list = [10, 10],
+                 metabolite_label_shift: list | None = None,
+                 reaction_label_shift: list | None = None,
                  database: str = "BIGG",
                  remove_orphan_metabolites: bool = False,
                  
                  axis_epsilon: float = 2,):
-        
-        self.DEBUG = True
         
         self.m_mapper = MetaNetXMapper(resource_path("metabolite_mapping.tsv"), "first")
         self.r_mapper = MetaNetXMapper(resource_path("reaction_mapping.tsv"), "first")
@@ -29,8 +27,8 @@ class EscherMapper:
         
         self.markers_dist = markers_dist
         self.factor = scaling_factor
-        self.metabolite_label_shift = metabolite_label_shift
-        self.reaction_label_shift = reaction_label_shift
+        self.metabolite_label_shift = list(metabolite_label_shift) if metabolite_label_shift is not None else [10, 10]
+        self.reaction_label_shift = list(reaction_label_shift) if reaction_label_shift is not None else [10, 10]
 
         self.remove_orphan_metabolites = remove_orphan_metabolites
 
@@ -40,8 +38,8 @@ class EscherMapper:
         self.mm_dist_part = 0.3
         self.use_const_mm_dist = False
         self.mm_dist_const = 300
-        self.axis_epsilon = axis_epsilon   # порог "на одной оси" (пиксели)
-        self.axis_offset = 20    # отступ от оси метаболитов
+        self.axis_epsilon = axis_epsilon
+        self.axis_offset = 20
         self.DB = database # SEED or BIGG
 
         self.segments_counter = 0
@@ -71,13 +69,9 @@ class EscherMapper:
 
         model = {}
 
-        # prepare all metabolites descriptions
         m_desc, m2indx_dict = self._prepare_elements_descriptions(self.metabolites, self._generate_metabolite_dict)
-        print(len(m_desc))
 
-        # prepare all reactions descriptions with subnodes
-        r_desc, r2indx_dict = self._prepare_elements_descriptions(self.reactions, self._genarate_reaction_dict)
-        print(r_desc)
+        r_desc, r2indx_dict = self._prepare_elements_descriptions(self.reactions, self._generate_reaction_dict)
         r_nodes, r2node_dict = self._prepare_reactions_nodes(self.reactions)
 
         # prepare multimarkers between reactions and metabolites
@@ -118,7 +112,7 @@ class EscherMapper:
         m_desc, m2indx_dict = self._prepare_elements_descriptions(self.metabolites, self._generate_metabolite_dict)
 
         # prepare all reactions descriptions with subnodes
-        r_desc, r2indx_dict = self._prepare_elements_descriptions(self.reactions, self._genarate_reaction_dict)
+        r_desc, r2indx_dict = self._prepare_elements_descriptions(self.reactions, self._generate_reaction_dict)
         r_nodes, r2node_dict = self._prepare_reactions_nodes(self.reactions)
 
         # prepare multimarkers between reactions and metabolites
@@ -139,7 +133,6 @@ class EscherMapper:
         if self.remove_orphan_metabolites:
             all_nodes = self._remove_orphan_metabolites(all_nodes, r_desc, r2indx_dict)
 
-        # побочные метаболиты
         secondary_data = self._extract_secondary_metabolites(cobra_model_reactions)
         all_nodes, r_desc = self._add_secondary_metabolites(secondary_data, all_nodes, r_desc, global_nodes_idxs)
 
@@ -206,11 +199,11 @@ class EscherMapper:
         m_dict["x"] = pos[0]
         m_dict["y"] = pos[1]
         m_dict["label_x"] = str(float(pos[0]) + self.metabolite_label_shift[0])
-        m_dict["label_y"] = str(float(pos[1]) + self.metabolite_label_shift[0])
+        m_dict["label_y"] = str(float(pos[1]) + self.metabolite_label_shift[1])
 
         return m_dict
     
-    def _genarate_reaction_dict(self, ids, reaction, name=None):
+    def _generate_reaction_dict(self, ids, reaction, name=None):
 
         if self.DB == "BIGG":
             id = ids["BIGG"]
@@ -299,7 +292,6 @@ class EscherMapper:
 
             positions = [np.array(self.metabolites[m]["position"], dtype=np.float64) for m in mets]
             center = np.mean(positions, axis=0)
-            print(center)
 
             return center
         
@@ -341,21 +333,18 @@ class EscherMapper:
     #     return None
 
     def _calc_multimarker_positions(self, reaction_data):
-        """Вычисляет позиции обоих мультимаркеров для реакции"""
+        """Calculate both multimarker positions for a reaction."""
         
         reaction_pos = np.array(reaction_data["position"], dtype=np.float64)
     
         substrates = reaction_data.get("substrates", {})
         products = reaction_data.get("products", {})
         
-        # Собираем ВСЕ метаболиты для проверки общей оси
         all_mets = substrates.get("main", []) + products.get("main", [])
         all_positions = [np.array(self.metabolites[m]["position"], dtype=np.float64) for m in all_mets]
         
-        # Проверяем общую ось
         common_axis_type, common_axis_value = self._check_metabolites_on_same_axis(all_positions)
         
-        # Теперь считаем позиции с учётом общей оси
         multimarker_in_pos = self._calc_multimarker_position(
             reaction_pos, substrates, products, common_axis_type, common_axis_value
         )
@@ -369,11 +358,7 @@ class EscherMapper:
     def _calc_multimarker_position(self, reaction_pos, metabolites, opposite_metabolites, 
                                 common_axis_type=None, common_axis_value=None):
         """
-        Вычисляет позицию одного мультимаркера.
-        Приоритет:
-        1. Метаболиты на одной оси между собой → mm на этой оси, x/y от реакции
-        2. Есть метаболит на оси с реакцией → mm на этой оси, перпендикуляр от opposite
-        3. Fallback → центр масс
+        Calculate one multimarker position.
         """
         
         mets = metabolites.get("main", None)
@@ -382,10 +367,8 @@ class EscherMapper:
         
         positions = [np.array(self.metabolites[m]["position"], dtype=np.float64) for m in mets]
         
-        # === 1. Если есть общая ось для всех метаболитов реакции ===
         if common_axis_type == "vertical":
             mm_x = reaction_pos[0]
-            # Сдвиг в сторону СВОИХ метаболитов
             my_center_y = np.mean([p[1] for p in positions])
             offset_dir = np.sign(my_center_y - reaction_pos[1])
             offset_dir = offset_dir if offset_dir != 0 else 1
@@ -394,24 +377,20 @@ class EscherMapper:
         
         if common_axis_type == "horizontal":
             mm_y = reaction_pos[1]
-            # Сдвиг в сторону СВОИХ метаболитов
             my_center_x = np.mean([p[0] for p in positions])
             offset_dir = np.sign(my_center_x - reaction_pos[0])
             offset_dir = offset_dir if offset_dir != 0 else 1
             mm_x = reaction_pos[0] + self.axis_offset * offset_dir
             return [mm_x, mm_y]
         
-        # === 2. Проверяем: есть ли метаболит на оси с реакцией? ===
         aligned_type, aligned_pos = self._find_aligned_metabolite(positions, reaction_pos)
         
         if aligned_type is not None:
             opposite_mets = opposite_metabolites.get("main", [])
             
             if aligned_type == "horizontal":
-                # Метаболит на горизонтали с реакцией
                 mm_y = reaction_pos[1]
                 
-                # Сдвиг в сторону СВОЕГО метаболита, не opposite
                 offset_dir = np.sign(aligned_pos[0] - reaction_pos[0])
                 offset_dir = offset_dir if offset_dir != 0 else 1
                 mm_x = reaction_pos[0] + self.axis_offset * offset_dir
@@ -419,7 +398,6 @@ class EscherMapper:
                 return [mm_x, mm_y]
 
             if aligned_type == "vertical":
-                # Метаболит на вертикали с реакцией
                 mm_x = reaction_pos[0]
                 
                 offset_dir = np.sign(aligned_pos[1] - reaction_pos[1])
@@ -428,13 +406,11 @@ class EscherMapper:
                 
                 return [mm_x, mm_y]
         
-        # === 3. Fallback: центр масс ===
         return self._calc_multimarker_position_by_mass_center(reaction_pos, positions)
     
     def _check_metabolites_on_same_axis(self, positions):
         """
-        Проверяет, лежат ли все метаболиты на одной оси.
-        Возвращает (axis_type, axis_value) или (None, None)
+        Return the shared axis for aligned metabolite positions, if any.
         """
         if len(positions) < 2:
             return None, None
@@ -442,11 +418,9 @@ class EscherMapper:
         ys = [p[1] for p in positions]
         xs = [p[0] for p in positions]
         
-        # Проверка горизонтали
         if max(ys) - min(ys) < self.axis_epsilon:
             return "horizontal", np.mean(ys)
         
-        # Проверка вертикали
         if max(xs) - min(xs) < self.axis_epsilon:
             return "vertical", np.mean(xs)
         
@@ -466,8 +440,6 @@ class EscherMapper:
             on_vertical = dx < self.axis_epsilon
             
             if on_horizontal and on_vertical:
-                # Оба условия — выбираем по МЕНЬШЕМУ отклонению
-                # Меньший dy = ближе к горизонтали, меньший dx = ближе к вертикали
                 if dy < dx:
                     align_type = "horizontal"
                 else:
@@ -488,8 +460,7 @@ class EscherMapper:
     
     def _find_nearest_opposite_coord(self, reaction_pos, opposite_mets, coord_idx):
         """
-        Находит координату (x или y) ближайшего opposite метаболита.
-        coord_idx: 0 для x, 1 для y
+        Return the selected coordinate from the nearest opposite metabolite.
         """
         best_dist = float('inf')
         best_coord = reaction_pos[coord_idx]
@@ -505,7 +476,7 @@ class EscherMapper:
         return best_coord
     
     def _calc_multimarker_position_by_mass_center(self, reaction_pos, positions):
-        """Fallback: позиция через центр масс"""
+        """Calculate fallback position from the mass center."""
         
         center = np.mean(positions, axis=0)
         vec = center - reaction_pos
@@ -612,8 +583,8 @@ class EscherMapper:
     
     def _extract_model_reactions(self, model, r_nodes):
 
-        matched = {}      # kegg_name → cobra_reaction (есть на карте И в модели)
-        anti_reactions = []  # kegg_name реакций карты, которых НЕТ в модели
+        matched = {}
+        anti_reactions = []
 
         for r_name in r_nodes.keys():
 
@@ -648,7 +619,6 @@ class EscherMapper:
 
     def _extract_model_metabolites(self, model, m_nodes):
 
-        # собираем все id из модели один раз
         model_ids = {"KEGG": set(), "BIGG": set(), "SEED": set()}
 
         for met in model.metabolites:
@@ -658,7 +628,6 @@ class EscherMapper:
                 names = names if isinstance(names, list) else [names]
                 model_ids[k] |= set(names)
 
-        # проверяем каждый метаболит карты
         ms = {}
         anti_ms = []
 
@@ -669,9 +638,6 @@ class EscherMapper:
             seeds = set(self.m_mapper[m_name].seed_all) if self.m_mapper.get(m_name) else set()
 
             if keggs & model_ids["KEGG"] or biggs & model_ids["BIGG"] or seeds & model_ids["SEED"]:
-                if m_name in ("C00103", "C15972", "C15973", "C01159"):
-                    print(f"MATCHED {m_name}: kegg={keggs & model_ids['KEGG']}, bigg={biggs & model_ids['BIGG']}, seed={seeds & model_ids['SEED']}")
-        
                 ms[m_name] = True
             else:
                 anti_ms.append(m_name)
@@ -700,10 +666,9 @@ class EscherMapper:
     
     def _extract_secondary_metabolites(self, matched_rs):
         """
-        Для каждой матчнутой реакции достаёт из COBRA-объекта метаболиты,
-        которых нет среди основных на карте.
+        Extract model metabolites that are not primary map metabolites.
         
-        Возвращает {r_name: {"substrates": [...], "products": [...]}}
+        Returns {r_name: {"substrates": [...], "products": [...]}}.
         """
 
         main_met_ids = set()
@@ -846,7 +811,7 @@ class EscherMapper:
 
     def _calc_secondary_position(self, anchor_pos, reaction_dir, perp, index, total, side=-1):
         """
-        side: -1 для субстратов (назад от anchor), +1 для продуктов (вперёд)
+        side: -1 for substrates, +1 for products.
         """
 
         lateral_offset = (-(total - 1) / 2.0 + index) * self.markers_dist * 3

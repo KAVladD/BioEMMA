@@ -1,10 +1,10 @@
 class EscherMerger():
 
-    def __init__(self, maps=[]):
+    def __init__(self, maps=None):
 
         self.reset()
 
-        self.maps = maps
+        self.maps = list(maps) if maps is not None else []
         self.bbox_size = [1, 1]
 
     def reset(self):
