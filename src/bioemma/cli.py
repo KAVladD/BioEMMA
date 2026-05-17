@@ -13,7 +13,9 @@ def build(args) -> None:
 
     if sources_count > 1:
         if args.output:
-            raise ValueError("--output can only be used with a single map. Use --output-dir for multiple maps.")
+            raise ValueError(
+                "--output can only be used with a single map. Use --output-dir for multiple maps."
+            )
         result = build_many_outputs(
             model=args.model,
             pathways=pathways or None,

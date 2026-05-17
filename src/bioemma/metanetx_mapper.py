@@ -416,7 +416,7 @@ if __name__ == "__main__":
         for e in ec_fb[:10]:
             print(f"  {e}")
 
-    print(f"\nПримеры:")
+    print("\nПримеры:")
     for kid in list(mapper.keys())[:15]:
         e = mapper[kid]
         print(f"  {e}")

@@ -54,15 +54,17 @@ class EscherMerger():
 
     def _get_map_size(self, emap):
 
-        x,y = 0,0
+        x, y = 0, 0
         nodes = emap[1]["nodes"]
 
-        for i, node in nodes.items():
+        for _i, node in nodes.items():
 
             if node["x"]:
 
-                if x < float(node["x"]): x = float(node["x"])
-                if y < float(node["y"]): y = float(node["y"])
+                if x < float(node["x"]):
+                    x = float(node["x"])
+                if y < float(node["y"]):
+                    y = float(node["y"])
 
         return [x, y]
     
@@ -123,15 +125,19 @@ class EscherMerger():
         
         nodes = emap[1]["nodes"]
 
-        for i, node in nodes.items():
+        for _i, node in nodes.items():
 
             if node["x"]:
 
-                if x_min > float(node["x"]): x_min = float(node["x"])
-                if x_max < float(node["x"]): x_max = float(node["x"])
+                if x_min > float(node["x"]):
+                    x_min = float(node["x"])
+                if x_max < float(node["x"]):
+                    x_max = float(node["x"])
 
-                if y_min > float(node["y"]): y_min = float(node["y"])
-                if y_max < float(node["y"]): y_max = float(node["y"])
+                if y_min > float(node["y"]):
+                    y_min = float(node["y"])
+                if y_max < float(node["y"]):
+                    y_max = float(node["y"])
 
         w = x_max - x_min
         h = y_max - y_min

@@ -109,7 +109,12 @@ def reconstruct_kegg_map(kegg_map: KeggMap, source: dict[str, Any] | None = None
     }
 
 
-def coerce_fluxes(model: Any, fluxes: Any = None, *, run_fba: bool = False) -> dict[str, float] | None:
+def coerce_fluxes(
+    model: Any,
+    fluxes: Any = None,
+    *,
+    run_fba: bool = False,
+) -> dict[str, float] | None:
     if fluxes is None and run_fba:
         solution = model.optimize()
         fluxes = solution.fluxes

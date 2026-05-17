@@ -27,8 +27,12 @@ class EscherMapper:
         
         self.markers_dist = markers_dist
         self.factor = scaling_factor
-        self.metabolite_label_shift = list(metabolite_label_shift) if metabolite_label_shift is not None else [10, 10]
-        self.reaction_label_shift = list(reaction_label_shift) if reaction_label_shift is not None else [10, 10]
+        self.metabolite_label_shift = (
+            list(metabolite_label_shift) if metabolite_label_shift is not None else [10, 10]
+        )
+        self.reaction_label_shift = (
+            list(reaction_label_shift) if reaction_label_shift is not None else [10, 10]
+        )
 
         self.remove_orphan_metabolites = remove_orphan_metabolites
 
@@ -69,9 +73,15 @@ class EscherMapper:
 
         model = {}
 
-        m_desc, m2indx_dict = self._prepare_elements_descriptions(self.metabolites, self._generate_metabolite_dict)
+        m_desc, m2indx_dict = self._prepare_elements_descriptions(
+            self.metabolites,
+            self._generate_metabolite_dict,
+        )
 
-        r_desc, r2indx_dict = self._prepare_elements_descriptions(self.reactions, self._generate_reaction_dict)
+        r_desc, r2indx_dict = self._prepare_elements_descriptions(
+            self.reactions,
+            self._generate_reaction_dict,
+        )
         r_nodes, r2node_dict = self._prepare_reactions_nodes(self.reactions)
 
         # prepare multimarkers between reactions and metabolites
@@ -82,7 +92,11 @@ class EscherMapper:
         all_nodes = self._compose_nodes(global_nodes_idxs, m_desc, r_nodes, r_mm_nodes)
 
         # update edges
-        r_desc = self._add_edges_to_reactions_descriptions(self.reactions, r_desc, global_nodes_idxs)
+        r_desc = self._add_edges_to_reactions_descriptions(
+            self.reactions,
+            r_desc,
+            global_nodes_idxs,
+        )
     
         model["nodes"] = {i:j for i,j in all_nodes.items() if j}
         
@@ -91,9 +105,16 @@ class EscherMapper:
         model["text_labels"] = self.text_labels
         model["canvas"] = self.canvas
         
-        model["nodes"], model["reactions"] = self._multiply_positions(model["nodes"], model["reactions"])
+        model["nodes"], model["reactions"] = self._multiply_positions(
+            model["nodes"],
+            model["reactions"],
+        )
         model["canvas"] = self._tune_canvas(model["nodes"], model["canvas"] )
-        model["nodes"], model["reactions"] = self._align_nodes(model["nodes"], model["reactions"], model["canvas"])
+        model["nodes"], model["reactions"] = self._align_nodes(
+            model["nodes"],
+            model["reactions"],
+            model["canvas"],
+        )
 
         escher_map.append(model)
 
@@ -109,10 +130,16 @@ class EscherMapper:
         model = {}
 
         # prepare all metabolites descriptions
-        m_desc, m2indx_dict = self._prepare_elements_descriptions(self.metabolites, self._generate_metabolite_dict)
+        m_desc, m2indx_dict = self._prepare_elements_descriptions(
+            self.metabolites,
+            self._generate_metabolite_dict,
+        )
 
         # prepare all reactions descriptions with subnodes
-        r_desc, r2indx_dict = self._prepare_elements_descriptions(self.reactions, self._generate_reaction_dict)
+        r_desc, r2indx_dict = self._prepare_elements_descriptions(
+            self.reactions,
+            self._generate_reaction_dict,
+        )
         r_nodes, r2node_dict = self._prepare_reactions_nodes(self.reactions)
 
         # prepare multimarkers between reactions and metabolites
@@ -123,18 +150,41 @@ class EscherMapper:
         all_nodes = self._compose_nodes(global_nodes_idxs, m_desc, r_nodes, r_mm_nodes)
 
         # update edges
-        r_desc = self._add_edges_to_reactions_descriptions(self.reactions, r_desc, global_nodes_idxs)
+        r_desc = self._add_edges_to_reactions_descriptions(
+            self.reactions,
+            r_desc,
+            global_nodes_idxs,
+        )
 
         # extract and prepare data from model
-        cobra_model_metabolites, anti_metabolites, cobra_model_reactions, anti_reactions = self._parse_model(cobra_model, m_desc, r_nodes)
-        all_nodes, r2indx_dict = self._subtract_not_in_model_reactions(global_nodes_idxs, all_nodes, anti_reactions, r2indx_dict)
-        all_nodes = self._subtract_not_in_model_metabolites(global_nodes_idxs, all_nodes, anti_metabolites)
+        (
+            cobra_model_metabolites,
+            anti_metabolites,
+            cobra_model_reactions,
+            anti_reactions,
+        ) = self._parse_model(cobra_model, m_desc, r_nodes)
+        all_nodes, r2indx_dict = self._subtract_not_in_model_reactions(
+            global_nodes_idxs,
+            all_nodes,
+            anti_reactions,
+            r2indx_dict,
+        )
+        all_nodes = self._subtract_not_in_model_metabolites(
+            global_nodes_idxs,
+            all_nodes,
+            anti_metabolites,
+        )
 
         if self.remove_orphan_metabolites:
             all_nodes = self._remove_orphan_metabolites(all_nodes, r_desc, r2indx_dict)
 
         secondary_data = self._extract_secondary_metabolites(cobra_model_reactions)
-        all_nodes, r_desc = self._add_secondary_metabolites(secondary_data, all_nodes, r_desc, global_nodes_idxs)
+        all_nodes, r_desc = self._add_secondary_metabolites(
+            secondary_data,
+            all_nodes,
+            r_desc,
+            global_nodes_idxs,
+        )
 
         model["nodes"] = {i:j for i,j in all_nodes.items() if j}
         
@@ -143,9 +193,16 @@ class EscherMapper:
         model["text_labels"] = self.text_labels
         model["canvas"] = self.canvas
         
-        model["nodes"], model["reactions"] = self._multiply_positions(model["nodes"], model["reactions"])
+        model["nodes"], model["reactions"] = self._multiply_positions(
+            model["nodes"],
+            model["reactions"],
+        )
         model["canvas"] = self._tune_canvas(model["nodes"], model["canvas"] )
-        model["nodes"], model["reactions"] = self._align_nodes(model["nodes"], model["reactions"], model["canvas"])
+        model["nodes"], model["reactions"] = self._align_nodes(
+            model["nodes"],
+            model["reactions"],
+            model["canvas"],
+        )
 
         escher_map.append(model)
 
@@ -222,8 +279,12 @@ class EscherMapper:
             "segments": {},
         }
 
-        reaction_dict["label_x"] = str(float(reaction["position"][0]) + self.reaction_label_shift[0])
-        reaction_dict["label_y"] = str(float(reaction["position"][1]) + self.reaction_label_shift[1])
+        reaction_dict["label_x"] = str(
+            float(reaction["position"][0]) + self.reaction_label_shift[0]
+        )
+        reaction_dict["label_y"] = str(
+            float(reaction["position"][1]) + self.reaction_label_shift[1]
+        )
 
         reaction_dict["metabolites"].extend([{"kegg_id": self.metabolites[m]["ids"]["KEGG"],
                                               "bigg_id": self.metabolites[m]["ids"]["BIGG"],
@@ -341,7 +402,10 @@ class EscherMapper:
         products = reaction_data.get("products", {})
         
         all_mets = substrates.get("main", []) + products.get("main", [])
-        all_positions = [np.array(self.metabolites[m]["position"], dtype=np.float64) for m in all_mets]
+        all_positions = [
+            np.array(self.metabolites[m]["position"], dtype=np.float64)
+            for m in all_mets
+        ]
         
         common_axis_type, common_axis_value = self._check_metabolites_on_same_axis(all_positions)
         
@@ -386,7 +450,8 @@ class EscherMapper:
         aligned_type, aligned_pos = self._find_aligned_metabolite(positions, reaction_pos)
         
         if aligned_type is not None:
-            opposite_mets = opposite_metabolites.get("main", [])
+            # TODO: Revisit opposite-side context during the layout refactor.
+            opposite_mets = opposite_metabolites.get("main", [])  # noqa: F841
             
             if aligned_type == "horizontal":
                 mm_y = reaction_pos[1]
@@ -672,7 +737,7 @@ class EscherMapper:
         """
 
         main_met_ids = set()
-        for m_name, m_data in self.metabolites.items():
+        for _m_name, m_data in self.metabolites.items():
             ids = m_data["ids"]
             for v in ids.values():
                 if v:
@@ -720,7 +785,7 @@ class EscherMapper:
         max_node_idx = max(int(k) for k in all_nodes.keys()) + 1
         
         seg_counter = 0
-        for r_name, r_data in r_desc.items():
+        for _r_name, r_data in r_desc.items():
             if r_data["segments"]:
                 seg_counter = max(seg_counter, max(int(k) for k in r_data["segments"].keys()) + 1)
 
@@ -735,9 +800,18 @@ class EscherMapper:
                 all_nodes.get(out_mm_idx) is None):
                 continue
 
-            reaction_pos = np.array([all_nodes[r_node_idx]["x"], all_nodes[r_node_idx]["y"]], dtype=np.float64)
-            in_mm_pos = np.array([all_nodes[in_mm_idx]["x"], all_nodes[in_mm_idx]["y"]], dtype=np.float64)
-            out_mm_pos = np.array([all_nodes[out_mm_idx]["x"], all_nodes[out_mm_idx]["y"]], dtype=np.float64)
+            reaction_pos = np.array(
+                [all_nodes[r_node_idx]["x"], all_nodes[r_node_idx]["y"]],
+                dtype=np.float64,
+            )
+            in_mm_pos = np.array(
+                [all_nodes[in_mm_idx]["x"], all_nodes[in_mm_idx]["y"]],
+                dtype=np.float64,
+            )
+            out_mm_pos = np.array(
+                [all_nodes[out_mm_idx]["x"], all_nodes[out_mm_idx]["y"]],
+                dtype=np.float64,
+            )
 
             subs_center = self._calc_main_metabolites_center(
                 self.reactions[r_name]["substrates"].get("main", [])
@@ -747,24 +821,68 @@ class EscherMapper:
             )
 
             if sec["substrates"] and subs_center is not None:
-                direction, perp = self._calc_secondary_directions_from_center(reaction_pos, subs_center)
+                direction, perp = self._calc_secondary_directions_from_center(
+                    reaction_pos,
+                    subs_center,
+                )
                 for j, entry in enumerate(sec["substrates"]):
-                    pos = self._calc_secondary_position(in_mm_pos, direction, perp, j, len(sec["substrates"]), side=1)
-                    node = self._generate_secondary_metabolite_dict(entry["bigg_id"], entry["name"], pos)
+                    pos = self._calc_secondary_position(
+                        in_mm_pos,
+                        direction,
+                        perp,
+                        j,
+                        len(sec["substrates"]),
+                        side=1,
+                    )
+                    node = self._generate_secondary_metabolite_dict(
+                        entry["bigg_id"],
+                        entry["name"],
+                        pos,
+                    )
                     all_nodes[max_node_idx] = node
-                    r_desc[r_name]["segments"][seg_counter] = self._prepare_edge_dict(max_node_idx, in_mm_idx)
-                    r_desc[r_name]["metabolites"].append({"bigg_id": entry["bigg_id"], "coefficient": entry["coefficient"]})
+                    r_desc[r_name]["segments"][seg_counter] = self._prepare_edge_dict(
+                        max_node_idx,
+                        in_mm_idx,
+                    )
+                    r_desc[r_name]["metabolites"].append(
+                        {
+                            "bigg_id": entry["bigg_id"],
+                            "coefficient": entry["coefficient"],
+                        }
+                    )
                     seg_counter += 1
                     max_node_idx += 1
 
             if sec["products"] and prods_center is not None:
-                direction, perp = self._calc_secondary_directions_from_center(reaction_pos, prods_center)
+                direction, perp = self._calc_secondary_directions_from_center(
+                    reaction_pos,
+                    prods_center,
+                )
                 for j, entry in enumerate(sec["products"]):
-                    pos = self._calc_secondary_position(out_mm_pos, direction, perp, j, len(sec["products"]), side=1)
-                    node = self._generate_secondary_metabolite_dict(entry["bigg_id"], entry["name"], pos)
+                    pos = self._calc_secondary_position(
+                        out_mm_pos,
+                        direction,
+                        perp,
+                        j,
+                        len(sec["products"]),
+                        side=1,
+                    )
+                    node = self._generate_secondary_metabolite_dict(
+                        entry["bigg_id"],
+                        entry["name"],
+                        pos,
+                    )
                     all_nodes[max_node_idx] = node
-                    r_desc[r_name]["segments"][seg_counter] = self._prepare_edge_dict(out_mm_idx, max_node_idx)
-                    r_desc[r_name]["metabolites"].append({"bigg_id": entry["bigg_id"], "coefficient": entry["coefficient"]})
+                    r_desc[r_name]["segments"][seg_counter] = self._prepare_edge_dict(
+                        out_mm_idx,
+                        max_node_idx,
+                    )
+                    r_desc[r_name]["metabolites"].append(
+                        {
+                            "bigg_id": entry["bigg_id"],
+                            "coefficient": entry["coefficient"],
+                        }
+                    )
                     seg_counter += 1
                     max_node_idx += 1
 
@@ -844,7 +962,12 @@ class EscherMapper:
                 referenced_nodes.add(seg["to_node_id"])
 
         for nid, node in all_nodes.items():
-            if node and node.get("node_type") == "metabolite" and node.get("node_is_primary") and nid not in referenced_nodes:
+            if (
+                node
+                and node.get("node_type") == "metabolite"
+                and node.get("node_is_primary")
+                and nid not in referenced_nodes
+            ):
                 all_nodes[nid] = None
 
         return all_nodes
@@ -856,7 +979,7 @@ class EscherMapper:
         x, y = 0, 0
         min_x, min_y = 0, 0
 
-        for i, compound_dict in nodes.items():
+        for _i, compound_dict in nodes.items():
 
             if not compound_dict:
                 continue

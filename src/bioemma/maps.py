@@ -20,7 +20,9 @@ class KeggMap():
         self.reset()
 
         self.metabolites = list(metabolites) if metabolites is not None else []
-        self.metabolites_positions = dict(metabolites_positions) if metabolites_positions is not None else {}
+        self.metabolites_positions = (
+            dict(metabolites_positions) if metabolites_positions is not None else {}
+        )
         self.reactions = list(reactions) if reactions is not None else []
         self.reaction_positions = dict(reaction_positions) if reaction_positions is not None else {}
 
@@ -55,7 +57,7 @@ class KeggMap():
             metabolite_pos = (entry_graphics["x"],
                                 entry_graphics["y"])
 
-            if not metabolite_name in self.metabolites:
+            if metabolite_name not in self.metabolites:
                 self.metabolites.append(metabolite_name)
             self.metabolites_positions[metabolite_name] = metabolite_pos
 
