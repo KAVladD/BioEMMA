@@ -140,6 +140,11 @@ BioEMMA's source code is distributed under the MIT License. Bundled mapping
 data are derived from third-party database resources and may be subject to
 their own license terms. See `LICENSE` and `NOTICE.md`.
 
+By default, the workflow keeps the KEGG reactions and compounds that can be
+matched to the COBRA model. To preserve KEGG-only elements that are not present
+in the model, pass `include_kegg_only=True` in Python or use
+`--include-kegg-only` in the CLI.
+
 ## Development Notes
 
 The package code lives in:

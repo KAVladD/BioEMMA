@@ -26,6 +26,7 @@ def build(args) -> None:
             scaling_factor=args.scaling_factor,
             axis_epsilon=args.axis_epsilon,
             remove_orphan_metabolites=args.remove_orphan_metabolites,
+            include_kegg_only=args.include_kegg_only,
             run_fba=args.run_fba,
             save_html=args.save_html,
             save_png=args.save_png,
@@ -44,6 +45,7 @@ def build(args) -> None:
         scaling_factor=args.scaling_factor,
         axis_epsilon=args.axis_epsilon,
         remove_orphan_metabolites=args.remove_orphan_metabolites,
+        include_kegg_only=args.include_kegg_only,
         run_fba=args.run_fba,
         save_html=args.save_html,
         save_png=args.save_png,
@@ -68,6 +70,7 @@ def main() -> None:
     build_parser.add_argument("--scaling-factor", type=float, default=4)
     build_parser.add_argument("--axis-epsilon", type=float, default=2)
     build_parser.add_argument("--remove-orphan-metabolites", action="store_true")
+    build_parser.add_argument("--include-kegg-only", action="store_true")
     build_parser.add_argument("--run-fba", action="store_true")
     build_parser.add_argument("--save-html", action="store_true")
     build_parser.add_argument("--save-png", action="store_true")

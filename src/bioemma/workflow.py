@@ -137,6 +137,7 @@ def build_escher_map(
     scaling_factor: float = 4,
     axis_epsilon: float = 2,
     remove_orphan_metabolites: bool = False,
+    include_kegg_only: bool = False,
 ) -> tuple[list[dict[str, Any]], dict[str, Any]]:
     cobra_model = load_model(model)
     kegg_map, source = load_kegg_map(pathway=pathway, kgml=kgml)
@@ -149,6 +150,7 @@ def build_escher_map(
         scaling_factor=scaling_factor,
         axis_epsilon=axis_epsilon,
         remove_orphan_metabolites=remove_orphan_metabolites,
+        include_kegg_only=include_kegg_only,
     )
     return mapper.build_map(cobra_model), kegg_reconstruction
 
@@ -200,6 +202,7 @@ def build_outputs(
     scaling_factor: float = 4,
     axis_epsilon: float = 2,
     remove_orphan_metabolites: bool = False,
+    include_kegg_only: bool = False,
     save_html: bool = False,
     save_png: bool = False,
 ) -> BioEmmaResult:
@@ -214,6 +217,7 @@ def build_outputs(
         scaling_factor=scaling_factor,
         axis_epsilon=axis_epsilon,
         remove_orphan_metabolites=remove_orphan_metabolites,
+        include_kegg_only=include_kegg_only,
     )
     escher_map = mapper.build_map(cobra_model)
     coerced_fluxes = coerce_fluxes(cobra_model, fluxes, run_fba=run_fba)
@@ -302,6 +306,7 @@ def build_many_outputs(
     scaling_factor: float = 4,
     axis_epsilon: float = 2,
     remove_orphan_metabolites: bool = False,
+    include_kegg_only: bool = False,
     save_html: bool = False,
     save_png: bool = False,
 ) -> BioEmmaBatchResult:
@@ -330,6 +335,7 @@ def build_many_outputs(
                 scaling_factor=scaling_factor,
                 axis_epsilon=axis_epsilon,
                 remove_orphan_metabolites=remove_orphan_metabolites,
+                include_kegg_only=include_kegg_only,
                 save_html=save_html,
                 save_png=save_png,
                 **kwargs,

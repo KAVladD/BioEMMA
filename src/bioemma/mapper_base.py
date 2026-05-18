@@ -14,6 +14,7 @@ class EscherMapper:
                  reaction_label_shift: list | None = None,
                  database: str = "BIGG",
                  remove_orphan_metabolites: bool = False,
+                 include_kegg_only: bool = False,
                  
                  axis_epsilon: float = 2,):
         
@@ -35,6 +36,7 @@ class EscherMapper:
         )
 
         self.remove_orphan_metabolites = remove_orphan_metabolites
+        self.include_kegg_only = include_kegg_only
 
         # add to init
         self.h_margin = 100
@@ -100,7 +102,11 @@ class EscherMapper:
     
         model["nodes"] = {i:j for i,j in all_nodes.items() if j}
         
-        model["reactions"] = {r2indx_dict[r]: r_desc[r] for r in r_desc.keys() if r2indx_dict[r]}
+        model["reactions"] = {
+            r2indx_dict[r]: r_desc[r]
+            for r in r_desc.keys()
+            if r2indx_dict[r] is not None
+        }
 
         model["text_labels"] = self.text_labels
         model["canvas"] = self.canvas
@@ -163,17 +169,18 @@ class EscherMapper:
             cobra_model_reactions,
             anti_reactions,
         ) = self._parse_model(cobra_model, m_desc, r_nodes)
-        all_nodes, r2indx_dict = self._subtract_not_in_model_reactions(
-            global_nodes_idxs,
-            all_nodes,
-            anti_reactions,
-            r2indx_dict,
-        )
-        all_nodes = self._subtract_not_in_model_metabolites(
-            global_nodes_idxs,
-            all_nodes,
-            anti_metabolites,
-        )
+        if not self.include_kegg_only:
+            all_nodes, r2indx_dict = self._subtract_not_in_model_reactions(
+                global_nodes_idxs,
+                all_nodes,
+                anti_reactions,
+                r2indx_dict,
+            )
+            all_nodes = self._subtract_not_in_model_metabolites(
+                global_nodes_idxs,
+                all_nodes,
+                anti_metabolites,
+            )
 
         if self.remove_orphan_metabolites:
             all_nodes = self._remove_orphan_metabolites(all_nodes, r_desc, r2indx_dict)
@@ -188,7 +195,11 @@ class EscherMapper:
 
         model["nodes"] = {i:j for i,j in all_nodes.items() if j}
         
-        model["reactions"] = {r2indx_dict[r]: r_desc[r] for r in r_desc.keys() if r2indx_dict[r]}
+        model["reactions"] = {
+            r2indx_dict[r]: r_desc[r]
+            for r in r_desc.keys()
+            if r2indx_dict[r] is not None
+        }
 
         model["text_labels"] = self.text_labels
         model["canvas"] = self.canvas

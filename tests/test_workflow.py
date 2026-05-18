@@ -39,7 +39,7 @@ def test_build_outputs_returns_and_saves_core_artifacts(monkeypatch, tmp_path):
 
     validation = validate_escher_map(result.escher_map)
     assert validation["nodes"] > 0
-    assert validation["reactions"] > 0
+    assert validation["reactions"] < result.kegg_reconstruction["counts"]["reactions"]
     assert validation["segments"] > 0
     assert validation["bad_segment_refs"] == []
 
@@ -53,6 +53,23 @@ def test_build_outputs_returns_and_saves_core_artifacts(monkeypatch, tmp_path):
     )
     assert validate_escher_map(saved_map)["bad_segment_refs"] == []
     assert saved_reconstruction["counts"] == result.kegg_reconstruction["counts"]
+
+
+def test_build_outputs_can_include_kegg_only_elements(monkeypatch, tmp_path):
+    _set_cobra_cache(monkeypatch, tmp_path)
+
+    result = build_outputs(
+        model=MODEL,
+        kgml=KGML,
+        database="BIGG",
+        scaling_factor=5,
+        axis_epsilon=10,
+        include_kegg_only=True,
+    )
+
+    validation = validate_escher_map(result.escher_map)
+    assert validation["reactions"] == result.kegg_reconstruction["counts"]["reactions"]
+    assert validation["bad_segment_refs"] == []
 
 
 def test_cli_build_writes_workflow_outputs(monkeypatch, tmp_path):

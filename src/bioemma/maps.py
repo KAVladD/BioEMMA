@@ -71,12 +71,7 @@ class KeggMap():
             if not entry_graphics or not reactions:
                 continue
 
-            for reaction in reactions.split():
-                parts = reaction.split(":", 1)
-                if len(parts) != 2:
-                    continue
-
-                reaction_name = parts[1]
+            for reaction_name in self._split_kegg_ids(reactions, "rn"):
                 reaction_pos = (entry_graphics["x"],
                                 entry_graphics["y"])
                 
@@ -93,12 +88,10 @@ class KeggMap():
         reaction_elements = xml.find_all("reaction")
         
         for reaction_elem in reaction_elements:
-            reaction_name = reaction_elem.get("name", "")
+            reaction_names = self._split_kegg_ids(reaction_elem.get("name", ""), "rn")
+            reaction_names = [r for r in reaction_names if r in self.reactions]
 
-            if ":" in reaction_name:
-                reaction_name = reaction_name.split(":")[1]
-            
-            if reaction_name not in self.reactions:
+            if not reaction_names:
                 continue
             
             reaction_type = reaction_elem.get("type", "unknown")
@@ -121,17 +114,29 @@ class KeggMap():
             main_products = [p for p in products if p in metabolite_ids]
             side_products = [p for p in products if p not in metabolite_ids]
             
-            self.reaction_substrates[reaction_name] = {
-                'main': main_substrates,
-                'side': side_substrates
-            }
-            
-            self.reaction_products[reaction_name] = {
-                'main': main_products,
-                'side': side_products
-            }
-            
-            self.reaction_types[reaction_name] = reaction_type
+            for reaction_name in reaction_names:
+                self.reaction_substrates[reaction_name] = {
+                    'main': main_substrates,
+                    'side': side_substrates
+                }
+                
+                self.reaction_products[reaction_name] = {
+                    'main': main_products,
+                    'side': side_products
+                }
+                
+                self.reaction_types[reaction_name] = reaction_type
+
+    @staticmethod
+    def _split_kegg_ids(value, namespace):
+        ids = []
+        prefix = f"{namespace}:"
+        for token in (value or "").split():
+            if token.startswith(prefix):
+                ids.append(token.split(":", 1)[1])
+            elif ":" not in token:
+                ids.append(token)
+        return ids
 
     def reset(self):
 

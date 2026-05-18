@@ -36,6 +36,11 @@ def test_kegg_map_parses_compounds_reactions_and_details():
     assert reactions["R00200"]["products"] == {"main": ["C00022"], "side": []}
     assert reactions["R00200"]["reversibility"] == "irreversible"
 
+    assert reactions["R01063"]["substrates"] == {"main": ["C00118"], "side": []}
+    assert reactions["R01063"]["products"] == {"main": ["C00236"], "side": []}
+    assert reactions["R10860"]["substrates"] == {"main": ["C00118"], "side": []}
+    assert reactions["R10860"]["products"] == {"main": ["C00197"], "side": []}
+
 
 def test_kegg_map_read_from_url_reads_response_without_temp_file(monkeypatch, tmp_path):
     class FakeResponse:
