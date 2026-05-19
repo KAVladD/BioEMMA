@@ -74,6 +74,29 @@ HTML output requires the `escher` package. BioEMMA does not export PNG files
 directly; open the HTML output in Escher and use Escher's built-in PNG export
 when a raster image is needed.
 
+### Reaction names and flux IDs
+
+Escher uses the reaction `bigg_id` both as the visible reaction label and as the
+key for flux overlays in `reaction_data`. BioEMMA therefore treats reaction IDs
+in the model-derived map as Escher display/overlay IDs, not only as database
+cross-reference metadata.
+
+For a model-derived map, BioEMMA keeps the KEGG reaction ID in the reaction
+`name` field. The Escher `bigg_id` is chosen as follows:
+
+- if the KEGG reaction matched the COBRA model through a BiGG reaction
+  annotation, use the matched model BiGG ID;
+- if the reaction matched through KEGG or SEED only, keep the default BiGG alias
+  resolved from the bundled mapping table;
+- for pure KEGG maps saved with `save_kegg_map=True`, use the default mapped
+  alias because there is no model reaction match to prefer.
+
+This avoids cases where a KEGG reaction such as `R01518` matches model reaction
+`PGM`, but the map displays and expects flux data under the first mapped alias
+`PGAM_h`. Flux data are still stored with their original model reaction IDs in
+`fluxes.json`; future workflow code may add an explicit flux remapping summary
+for Escher overlays.
+
 Visualization layout settings can be tuned with `VisualizationOptions`:
 
 ```python

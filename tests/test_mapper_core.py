@@ -95,6 +95,39 @@ def test_mapper_accepts_layout_visualization_options():
     assert model["canvas"]["height"] == 125
 
 
+def test_model_bigg_match_overrides_default_reaction_alias():
+    reactions = {
+        "R01518": {
+            "ids": {"KEGG": "R01518", "BIGG": "PGAM_h", "SEED": "rxn01106"},
+            "position": ("50", "0"),
+            "substrates": {"main": [], "side": []},
+            "products": {"main": [], "side": []},
+            "reversibility": "reversible",
+        },
+    }
+
+    class FakeReaction:
+        def __init__(self, annotation):
+            self.annotation = annotation
+            self.metabolites = {}
+
+    class FakeModel:
+        def __init__(self, reaction):
+            self.reactions = [reaction]
+            self.metabolites = []
+
+    bigg_model = FakeModel(FakeReaction({"bigg.reaction": "PGM"}))
+    bigg_map = EscherMapper({}, reactions, scaling_factor=1).build_map(bigg_model)
+    bigg_reaction = next(iter(bigg_map[1]["reactions"].values()))
+
+    kegg_model = FakeModel(FakeReaction({"kegg.reaction": "R01518"}))
+    kegg_map = EscherMapper({}, reactions, scaling_factor=1).build_map(kegg_model)
+    kegg_reaction = next(iter(kegg_map[1]["reactions"].values()))
+
+    assert bigg_reaction["bigg_id"] == "PGM"
+    assert kegg_reaction["bigg_id"] == "PGAM_h"
+
+
 def test_multimarker_distance_options_affect_aligned_reactions():
     metabolites = {
         "C00001": {

@@ -197,7 +197,9 @@ class EscherMapper:
             anti_metabolites,
             cobra_model_reactions,
             anti_reactions,
+            model_reaction_bigg_ids,
         ) = self._parse_model(cobra_model, m_desc, r_nodes)
+        self._apply_model_reaction_bigg_ids(r_desc, model_reaction_bigg_ids)
         self.map_stats["model_matching"] = {
             "matched_metabolites": len(cobra_model_metabolites),
             "unmatched_metabolites": len(anti_metabolites),
@@ -828,14 +830,18 @@ class EscherMapper:
 
     def _parse_model(self, model, m_nodes, r_nodes):
 
-        matched_rs, anti_rs = self._extract_model_reactions(model, r_nodes)
+        matched_rs, anti_rs, model_reaction_bigg_ids = self._extract_model_reactions(
+            model,
+            r_nodes,
+        )
         ms, anti_ms = self._extract_model_metabolites(model, m_nodes)
 
-        return ms, anti_ms, matched_rs, anti_rs
+        return ms, anti_ms, matched_rs, anti_rs, model_reaction_bigg_ids
     
     def _extract_model_reactions(self, model, r_nodes):
 
         matched = {}
+        model_reaction_bigg_ids = {}
         anti_reactions = []
 
         for r_name in r_nodes.keys():
@@ -845,29 +851,55 @@ class EscherMapper:
             seeds = set(self.r_mapper[r_name].seed_all) if self.r_mapper.get(r_name) else set()
 
             found = None
+            found_bigg_id = None
             for rxn in model.reactions:
 
-                rxn_kegg = rxn.annotation.get("kegg.reaction", [])
-                rxn_kegg = rxn_kegg if isinstance(rxn_kegg, list) else [rxn_kegg]
+                rxn_kegg = self._annotation_values(rxn.annotation, "kegg.reaction")
+                rxn_bigg = self._annotation_values(rxn.annotation, "bigg.reaction")
+                rxn_seed = self._annotation_values(rxn.annotation, "seed.reaction")
 
-                rxn_bigg = rxn.annotation.get("bigg.reaction", [])
-                rxn_bigg = rxn_bigg if isinstance(rxn_bigg, list) else [rxn_bigg]
-
-                rxn_seed = rxn.annotation.get("seed.reaction", [])
-                rxn_seed = rxn_seed if isinstance(rxn_seed, list) else [rxn_seed]
+                bigg_matches = biggs & set(rxn_bigg)
 
                 if (keggs & set(rxn_kegg) or
-                    biggs & set(rxn_bigg) or
+                    bigg_matches or
                     seeds & set(rxn_seed)):
                     found = rxn
+                    if bigg_matches:
+                        found_bigg_id = self._select_model_reaction_bigg_id(
+                            rxn_bigg,
+                            bigg_matches,
+                        )
                     break
 
             if found:
                 matched[r_name] = found
+                if found_bigg_id:
+                    model_reaction_bigg_ids[r_name] = found_bigg_id
             else:
                 anti_reactions.append(r_name)
 
-        return matched, anti_reactions
+        return matched, anti_reactions, model_reaction_bigg_ids
+
+    def _annotation_values(self, annotation, key):
+        values = annotation.get(key, [])
+        if values is None:
+            return []
+        if isinstance(values, str):
+            values = [values]
+        elif not isinstance(values, (list, tuple, set)):
+            values = [values]
+        return [str(value) for value in values if value]
+
+    def _select_model_reaction_bigg_id(self, rxn_bigg, bigg_matches):
+        for value in rxn_bigg:
+            if value in bigg_matches:
+                return value
+        return sorted(bigg_matches)[0] if bigg_matches else None
+
+    def _apply_model_reaction_bigg_ids(self, r_desc, model_reaction_bigg_ids):
+        for r_name, bigg_id in model_reaction_bigg_ids.items():
+            if r_name in r_desc:
+                r_desc[r_name]["bigg_id"] = bigg_id
 
     def _extract_model_metabolites(self, model, m_nodes):
 

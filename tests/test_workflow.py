@@ -69,10 +69,16 @@ def test_build_outputs_returns_and_saves_core_artifacts(monkeypatch, tmp_path):
         result.paths["kegg_source_reconstruction_json"].read_text(encoding="utf-8")
     )
     saved_summary = json.loads(result.paths["summary_json"].read_text(encoding="utf-8"))
+    phosphoglycerate_mutase = next(
+        reaction
+        for reaction in saved_map[1]["reactions"].values()
+        if reaction["name"] == "R01518"
+    )
     assert validate_escher_map(saved_map)["nodes"] == validation["nodes"]
     assert validate_escher_map(saved_kegg_map)["reactions"] == result.kegg_reconstruction[
         "counts"
     ]["reactions"]
+    assert phosphoglycerate_mutase["bigg_id"] == "PGM"
     assert saved_reconstruction["counts"] == result.kegg_reconstruction["counts"]
     assert saved_summary["map_stats"] == result.summary["map_stats"]
     assert saved_summary["kegg_escher"]["bad_segment_refs"] == []
