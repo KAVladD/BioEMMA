@@ -4,6 +4,7 @@ import subprocess
 import sys
 from pathlib import Path
 
+from bioemma.visualization import VisualizationOptions
 from bioemma.workflow import build_many_outputs, build_outputs, validate_escher_map
 
 
@@ -202,17 +203,16 @@ def test_build_many_outputs_merges_model_and_kegg_maps_separately(monkeypatch, t
     ]
 
 
-def test_build_many_outputs_can_render_merged_maps(monkeypatch, tmp_path):
+def test_build_many_outputs_can_render_html_and_individual_flux_maps(monkeypatch, tmp_path):
     _set_cobra_cache(monkeypatch, tmp_path)
 
-    def fake_save_html(path, _map_json_path, **_kwargs):
+    html_calls = []
+
+    def fake_save_html(path, _map_json_path, **kwargs):
+        html_calls.append((path.name, kwargs))
         path.write_text("<html></html>", encoding="utf-8")
 
-    def fake_save_png(_html_path, png_path):
-        png_path.write_bytes(b"png")
-
     monkeypatch.setattr("bioemma.workflow._save_html", fake_save_html)
-    monkeypatch.setattr("bioemma.workflow._save_png", fake_save_png)
 
     result = build_many_outputs(
         model=MODEL,
@@ -223,16 +223,46 @@ def test_build_many_outputs_can_render_merged_maps(monkeypatch, tmp_path):
         axis_epsilon=10,
         save_kegg_map=True,
         save_html=True,
-        save_png=True,
+        run_fba=True,
     )
 
     for key in [
         "merged_escher_map_html",
-        "merged_escher_map_png",
         "merged_kegg_escher_map_html",
-        "merged_kegg_escher_map_png",
     ]:
         assert result.paths[key].is_file()
+    for item_result in result.results:
+        assert item_result.paths["fluxes_json"].is_file()
+        assert item_result.paths["escher_map_with_fluxes_html"].is_file()
+
+    flux_html_calls = [
+        kwargs for name, kwargs in html_calls if name == "escher_map_with_fluxes.html"
+    ]
+    assert len(flux_html_calls) == 2
+    assert all(call["reaction_data"] for call in flux_html_calls)
+
+
+def test_build_outputs_accepts_visualization_options(monkeypatch, tmp_path):
+    _set_cobra_cache(monkeypatch, tmp_path)
+
+    result = build_outputs(
+        model=MODEL,
+        kgml=KGML,
+        database="BIGG",
+        visualization_options=VisualizationOptions(
+            scaling_factor=3,
+            canvas_margin_x=220,
+            canvas_margin_y=180,
+            axis_offset=25,
+        ),
+        metabolite_label_shift=(8, 12),
+    )
+
+    options = result.summary["visualization_options"]
+    assert options["scaling_factor"] == 3
+    assert options["canvas_margin_x"] == 220
+    assert options["axis_offset"] == 25
+    assert options["metabolite_label_shift"] == [8, 12]
 
 
 def test_cli_build_accepts_multiple_kgmls_and_merges(monkeypatch, tmp_path):

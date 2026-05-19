@@ -44,6 +44,55 @@ def test_build_kegg_map_keeps_first_reaction_index():
     assert escher_map[1]["reactions"][0]["name"] == "first"
 
 
+def test_mapper_accepts_layout_visualization_options():
+    metabolites = {
+        "C00001": {
+            "ids": {"KEGG": "C00001", "BIGG": "h2o", "SEED": "cpd00001"},
+            "position": ("0", "0"),
+        },
+        "C00002": {
+            "ids": {"KEGG": "C00002", "BIGG": "atp", "SEED": "cpd00002"},
+            "position": ("100", "0"),
+        },
+    }
+    reactions = {
+        "first": {
+            "ids": {"KEGG": "R00001", "BIGG": "FIRST", "SEED": "rxn00001"},
+            "position": ("50", "0"),
+            "substrates": {"main": ["C00001"], "side": []},
+            "products": {"main": ["C00002"], "side": []},
+            "reversibility": "irreversible",
+        },
+    }
+
+    escher_map = EscherMapper(
+        metabolites,
+        reactions,
+        scaling_factor=1,
+        metabolite_label_shift=(3, 7),
+        reaction_label_shift=(11, 13),
+        canvas_margin_x=250,
+        canvas_margin_y=125,
+        axis_offset=15,
+    ).build_kegg_map()
+
+    model = escher_map[1]
+    metabolite = next(
+        node for node in model["nodes"].values() if node.get("bigg_id") == "h2o"
+    )
+    midmarker = next(
+        node for node in model["nodes"].values() if node.get("node_type") == "midmarker"
+    )
+    reaction = model["reactions"][0]
+
+    assert float(metabolite["label_x"]) - float(metabolite["x"]) == 3
+    assert float(metabolite["label_y"]) - float(metabolite["y"]) == 7
+    assert float(reaction["label_x"]) - float(midmarker["x"]) == 11
+    assert float(reaction["label_y"]) - float(midmarker["y"]) == 13
+    assert model["canvas"]["width"] == 350
+    assert model["canvas"]["height"] == 125
+
+
 def test_build_map_adds_secondary_metabolites_and_valid_segments(monkeypatch, tmp_path):
     cache_root = tmp_path / "cobra-cache"
     monkeypatch.setenv("BIOEMMA_COBRA_CACHE_DIR", str(cache_root))

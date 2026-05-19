@@ -8,14 +8,21 @@ class EscherMapper:
     def __init__(self, 
                  metabolites: dict, 
                  reactions: dict,
-                 markers_dist: int = 10,
+                 markers_dist: float = 10,
                  scaling_factor: float = 4,
                  metabolite_label_shift: list | None = None,
                  reaction_label_shift: list | None = None,
                  database: str = "BIGG",
                  remove_orphan_metabolites: bool = False,
                  include_kegg_only: bool = False,
-                 
+                 canvas_margin_x: float = 160,
+                 canvas_margin_y: float = 160,
+                 multimarker_distance_fraction: float = 0.3,
+                 use_constant_multimarker_distance: bool = False,
+                 constant_multimarker_distance: float = 300,
+                 axis_offset: float = 20,
+                 canvas_width: float = 1000,
+                 canvas_height: float = 1000,
                  axis_epsilon: float = 2,):
         
         self.m_mapper = MetaNetXMapper(resource_path("metabolite_mapping.tsv"), "first")
@@ -26,7 +33,7 @@ class EscherMapper:
 
         self.map_main_metabolites = []
         
-        self.markers_dist = markers_dist
+        self.markers_dist = float(markers_dist)
         self.factor = scaling_factor
         self.metabolite_label_shift = (
             list(metabolite_label_shift) if metabolite_label_shift is not None else [10, 10]
@@ -38,14 +45,15 @@ class EscherMapper:
         self.remove_orphan_metabolites = remove_orphan_metabolites
         self.include_kegg_only = include_kegg_only
 
-        # add to init
-        self.h_margin = 100
-        self.w_margin = 100
-        self.mm_dist_part = 0.3
-        self.use_const_mm_dist = False
-        self.mm_dist_const = 300
+        self.canvas_margin_x = float(canvas_margin_x)
+        self.canvas_margin_y = float(canvas_margin_y)
+        self.h_margin = self.canvas_margin_x
+        self.w_margin = self.canvas_margin_y
+        self.mm_dist_part = float(multimarker_distance_fraction)
+        self.use_const_mm_dist = use_constant_multimarker_distance
+        self.mm_dist_const = float(constant_multimarker_distance)
         self.axis_epsilon = axis_epsilon
-        self.axis_offset = 20
+        self.axis_offset = float(axis_offset)
         self.DB = database # SEED or BIGG
 
         self.segments_counter = 0
@@ -62,8 +70,8 @@ class EscherMapper:
         self.canvas = {
             "x": 0,
             "y": 0,
-            "width": 1000,
-            "height": 1000,
+            "width": canvas_width,
+            "height": canvas_height,
         }
         self.map_stats = {}
 
@@ -1144,8 +1152,8 @@ class EscherMapper:
                 if min_y > float(compound_dict["y"]):
                     min_y = float(compound_dict["y"])
 
-        canvas["width"] = x - min_x + self.h_margin
-        canvas["height"] = y - min_y + self.w_margin
+        canvas["width"] = x - min_x + self.canvas_margin_x
+        canvas["height"] = y - min_y + self.canvas_margin_y
 
         return canvas
 

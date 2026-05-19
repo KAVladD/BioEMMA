@@ -66,15 +66,41 @@ out/rn00010/
   kegg_source_reconstruction.json
   summary.json
   fluxes.json              # when fluxes are provided or run_fba=True
-  escher_map.html          # when save_html=True or save_png=True
-  escher_map.png           # when save_png=True
-  escher_map_with_fluxes.html  # when flux data and HTML/PNG output are requested
-  escher_map_with_fluxes.png   # when flux data and PNG output are requested
+  escher_map.html          # when save_html=True
+  escher_map_with_fluxes.html  # when flux data and HTML output are requested
 ```
 
-HTML output requires the `escher` package. PNG output additionally requires
-`playwright` and a browser installed for Playwright. These visualization
-dependencies are not installed automatically by BioEMMA.
+HTML output requires the `escher` package. BioEMMA does not export PNG files
+directly; open the HTML output in Escher and use Escher's built-in PNG export
+when a raster image is needed.
+
+Visualization layout settings can be tuned with `VisualizationOptions`:
+
+```python
+from bioemma.workflow import build_outputs
+from bioemma.visualization import VisualizationOptions
+
+
+result = build_outputs(
+    model="path/to/model.xml",
+    pathway="rn00010",
+    output_dir="out",
+    visualization_options=VisualizationOptions(
+        scaling_factor=4,
+        axis_epsilon=2,
+        markers_dist=10,
+        metabolite_label_shift=(10, 10),
+        reaction_label_shift=(10, 10),
+        canvas_margin_x=160,
+        canvas_margin_y=160,
+        axis_offset=20,
+    ),
+)
+```
+
+The defaults are conservative starting values for KEGG layouts: coordinates are
+scaled up for Escher readability, aligned reaction lanes keep a small tolerance,
+and secondary metabolites get enough spacing after scaling.
 
 ## Command Line Usage
 
@@ -130,6 +156,12 @@ add `--save-kegg-map`:
 
 ```bash
 bioemma build --model path/to/model.xml --kgml path/to/rn00010.xml --output-dir out --save-kegg-map
+```
+
+The same visualization settings are available in the CLI, for example:
+
+```bash
+bioemma build --model path/to/model.xml --kgml path/to/rn00010.xml --output-dir out --scaling-factor 4 --canvas-margin-x 160 --canvas-margin-y 160
 ```
 
 If cobrapy cannot access its default cache directory on Windows, set a local

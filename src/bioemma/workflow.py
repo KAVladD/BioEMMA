@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import json
 import os
-from dataclasses import dataclass, field
+from dataclasses import asdict, dataclass, field
 from pathlib import Path
 from typing import Any
 from urllib.request import urlopen
@@ -10,6 +10,7 @@ from urllib.request import urlopen
 from bioemma.mapper_base import EscherMapper
 from bioemma.maps import KeggMap
 from bioemma.merger import EscherMerger
+from bioemma.visualization import VisualizationOptions, resolve_visualization_options
 
 
 @dataclass
@@ -167,11 +168,35 @@ def build_escher_map(
     pathway: str | int | None = None,
     kgml: str | Path | None = None,
     database: str = "BIGG",
-    scaling_factor: float = 4,
-    axis_epsilon: float = 2,
+    visualization_options: VisualizationOptions | dict[str, Any] | None = None,
+    scaling_factor: float | None = None,
+    axis_epsilon: float | None = None,
+    markers_dist: float | None = None,
+    metabolite_label_shift: list[float] | tuple[float, float] | None = None,
+    reaction_label_shift: list[float] | tuple[float, float] | None = None,
+    canvas_margin_x: float | None = None,
+    canvas_margin_y: float | None = None,
+    multimarker_distance_fraction: float | None = None,
+    use_constant_multimarker_distance: bool | None = None,
+    constant_multimarker_distance: float | None = None,
+    axis_offset: float | None = None,
     remove_orphan_metabolites: bool = False,
     include_kegg_only: bool = False,
 ) -> tuple[list[dict[str, Any]], dict[str, Any]]:
+    options = _resolve_visualization_options(
+        visualization_options,
+        scaling_factor=scaling_factor,
+        axis_epsilon=axis_epsilon,
+        markers_dist=markers_dist,
+        metabolite_label_shift=metabolite_label_shift,
+        reaction_label_shift=reaction_label_shift,
+        canvas_margin_x=canvas_margin_x,
+        canvas_margin_y=canvas_margin_y,
+        multimarker_distance_fraction=multimarker_distance_fraction,
+        use_constant_multimarker_distance=use_constant_multimarker_distance,
+        constant_multimarker_distance=constant_multimarker_distance,
+        axis_offset=axis_offset,
+    )
     cobra_model = load_model(model)
     kegg_map, source = load_kegg_map(pathway=pathway, kgml=kgml)
     kegg_reconstruction = reconstruct_kegg_map(kegg_map, source)
@@ -180,8 +205,7 @@ def build_escher_map(
         metabolites=kegg_reconstruction["metabolites"],
         reactions=kegg_reconstruction["reactions"],
         database=database,
-        scaling_factor=scaling_factor,
-        axis_epsilon=axis_epsilon,
+        **_mapper_visualization_kwargs(options),
         remove_orphan_metabolites=remove_orphan_metabolites,
         include_kegg_only=include_kegg_only,
     )
@@ -276,14 +300,37 @@ def build_outputs(
     fluxes: Any = None,
     run_fba: bool = False,
     database: str = "BIGG",
-    scaling_factor: float = 4,
-    axis_epsilon: float = 2,
+    visualization_options: VisualizationOptions | dict[str, Any] | None = None,
+    scaling_factor: float | None = None,
+    axis_epsilon: float | None = None,
+    markers_dist: float | None = None,
+    metabolite_label_shift: list[float] | tuple[float, float] | None = None,
+    reaction_label_shift: list[float] | tuple[float, float] | None = None,
+    canvas_margin_x: float | None = None,
+    canvas_margin_y: float | None = None,
+    multimarker_distance_fraction: float | None = None,
+    use_constant_multimarker_distance: bool | None = None,
+    constant_multimarker_distance: float | None = None,
+    axis_offset: float | None = None,
     remove_orphan_metabolites: bool = False,
     include_kegg_only: bool = False,
     save_kegg_map: bool = False,
     save_html: bool = False,
-    save_png: bool = False,
 ) -> BioEmmaResult:
+    options = _resolve_visualization_options(
+        visualization_options,
+        scaling_factor=scaling_factor,
+        axis_epsilon=axis_epsilon,
+        markers_dist=markers_dist,
+        metabolite_label_shift=metabolite_label_shift,
+        reaction_label_shift=reaction_label_shift,
+        canvas_margin_x=canvas_margin_x,
+        canvas_margin_y=canvas_margin_y,
+        multimarker_distance_fraction=multimarker_distance_fraction,
+        use_constant_multimarker_distance=use_constant_multimarker_distance,
+        constant_multimarker_distance=constant_multimarker_distance,
+        axis_offset=axis_offset,
+    )
     cobra_model = load_model(model)
     kegg_map, source = load_kegg_map(pathway=pathway, kgml=kgml)
     kegg_reconstruction = reconstruct_kegg_map(kegg_map, source)
@@ -292,8 +339,7 @@ def build_outputs(
         metabolites=kegg_reconstruction["metabolites"],
         reactions=kegg_reconstruction["reactions"],
         database=database,
-        scaling_factor=scaling_factor,
-        axis_epsilon=axis_epsilon,
+        **_mapper_visualization_kwargs(options),
         remove_orphan_metabolites=remove_orphan_metabolites,
         include_kegg_only=include_kegg_only,
     )
@@ -304,8 +350,7 @@ def build_outputs(
             metabolites=kegg_reconstruction["metabolites"],
             reactions=kegg_reconstruction["reactions"],
             database=database,
-            scaling_factor=scaling_factor,
-            axis_epsilon=axis_epsilon,
+            **_mapper_visualization_kwargs(options),
         )
         kegg_escher_map = kegg_mapper.build_kegg_map()
     coerced_fluxes = coerce_fluxes(cobra_model, fluxes, run_fba=run_fba)
@@ -319,6 +364,7 @@ def build_outputs(
         "escher": validate_escher_map(escher_map),
         "map_stats": mapper.map_stats,
         "has_fluxes": coerced_fluxes is not None,
+        "visualization_options": _visualization_options_summary(options),
     }
     if kegg_escher_map is not None:
         summary["kegg_escher"] = validate_escher_map(kegg_escher_map)
@@ -366,37 +412,6 @@ def build_outputs(
                     reaction_data=coerced_fluxes,
                 )
 
-        if save_png:
-            if "escher_map_html" not in paths:
-                paths["escher_map_html"] = target_dir / "escher_map.html"
-                _save_html(paths["escher_map_html"], paths["escher_map_json"])
-            if kegg_escher_map is not None and "kegg_escher_map_html" not in paths:
-                paths["kegg_escher_map_html"] = target_dir / "kegg_escher_map.html"
-                _save_html(paths["kegg_escher_map_html"], paths["kegg_escher_map_json"])
-            if coerced_fluxes is not None and "escher_map_with_fluxes_html" not in paths:
-                paths["escher_map_with_fluxes_html"] = (
-                    target_dir / "escher_map_with_fluxes.html"
-                )
-                _save_html(
-                    paths["escher_map_with_fluxes_html"],
-                    paths["escher_map_json"],
-                    model=cobra_model,
-                    reaction_data=coerced_fluxes,
-                )
-            paths["escher_map_png"] = target_dir / "escher_map.png"
-            _save_png(paths["escher_map_html"], paths["escher_map_png"])
-            if kegg_escher_map is not None:
-                paths["kegg_escher_map_png"] = target_dir / "kegg_escher_map.png"
-                _save_png(paths["kegg_escher_map_html"], paths["kegg_escher_map_png"])
-            if "escher_map_with_fluxes_html" in paths:
-                paths["escher_map_with_fluxes_png"] = (
-                    target_dir / "escher_map_with_fluxes.png"
-                )
-                _save_png(
-                    paths["escher_map_with_fluxes_html"],
-                    paths["escher_map_with_fluxes_png"],
-                )
-
         summary["paths"] = {key: str(path) for key, path in paths.items()}
         _write_json(paths["summary_json"], summary)
 
@@ -421,14 +436,37 @@ def build_many_outputs(
     fluxes: Any = None,
     run_fba: bool = False,
     database: str = "BIGG",
-    scaling_factor: float = 4,
-    axis_epsilon: float = 2,
+    visualization_options: VisualizationOptions | dict[str, Any] | None = None,
+    scaling_factor: float | None = None,
+    axis_epsilon: float | None = None,
+    markers_dist: float | None = None,
+    metabolite_label_shift: list[float] | tuple[float, float] | None = None,
+    reaction_label_shift: list[float] | tuple[float, float] | None = None,
+    canvas_margin_x: float | None = None,
+    canvas_margin_y: float | None = None,
+    multimarker_distance_fraction: float | None = None,
+    use_constant_multimarker_distance: bool | None = None,
+    constant_multimarker_distance: float | None = None,
+    axis_offset: float | None = None,
     remove_orphan_metabolites: bool = False,
     include_kegg_only: bool = False,
     save_kegg_map: bool = False,
     save_html: bool = False,
-    save_png: bool = False,
 ) -> BioEmmaBatchResult:
+    options = _resolve_visualization_options(
+        visualization_options,
+        scaling_factor=scaling_factor,
+        axis_epsilon=axis_epsilon,
+        markers_dist=markers_dist,
+        metabolite_label_shift=metabolite_label_shift,
+        reaction_label_shift=reaction_label_shift,
+        canvas_margin_x=canvas_margin_x,
+        canvas_margin_y=canvas_margin_y,
+        multimarker_distance_fraction=multimarker_distance_fraction,
+        use_constant_multimarker_distance=use_constant_multimarker_distance,
+        constant_multimarker_distance=constant_multimarker_distance,
+        axis_offset=axis_offset,
+    )
     if bool(pathways) == bool(kgmls):
         raise ValueError("Provide either pathways or kgmls.")
 
@@ -451,13 +489,11 @@ def build_many_outputs(
                 fluxes=fluxes,
                 run_fba=run_fba,
                 database=database,
-                scaling_factor=scaling_factor,
-                axis_epsilon=axis_epsilon,
+                visualization_options=options,
                 remove_orphan_metabolites=remove_orphan_metabolites,
                 include_kegg_only=include_kegg_only,
                 save_kegg_map=save_kegg_map,
                 save_html=save_html,
-                save_png=save_png,
                 **kwargs,
             )
         )
@@ -478,19 +514,6 @@ def build_many_outputs(
                 paths["merged_escher_map_html"],
                 paths["merged_escher_map_json"],
             )
-        if save_png:
-            if "merged_escher_map_html" not in paths:
-                paths["merged_escher_map_html"] = paths[
-                    "merged_escher_map_json"
-                ].with_suffix(".html")
-                _save_html(
-                    paths["merged_escher_map_html"],
-                    paths["merged_escher_map_json"],
-                )
-            paths["merged_escher_map_png"] = paths[
-                "merged_escher_map_json"
-            ].with_suffix(".png")
-            _save_png(paths["merged_escher_map_html"], paths["merged_escher_map_png"])
         if save_kegg_map:
             kegg_map_paths = [
                 result.paths["kegg_escher_map_json"]
@@ -511,27 +534,11 @@ def build_many_outputs(
                         paths["merged_kegg_escher_map_html"],
                         paths["merged_kegg_escher_map_json"],
                     )
-                if save_png:
-                    if "merged_kegg_escher_map_html" not in paths:
-                        paths["merged_kegg_escher_map_html"] = paths[
-                            "merged_kegg_escher_map_json"
-                        ].with_suffix(".html")
-                        _save_html(
-                            paths["merged_kegg_escher_map_html"],
-                            paths["merged_kegg_escher_map_json"],
-                        )
-                    paths["merged_kegg_escher_map_png"] = paths[
-                        "merged_kegg_escher_map_json"
-                    ].with_suffix(".png")
-                    _save_png(
-                        paths["merged_kegg_escher_map_html"],
-                        paths["merged_kegg_escher_map_png"],
-                    )
-
     summary = {
         "count": len(results),
         "items": [result.summary for result in results],
         "paths": {key: str(path) for key, path in paths.items()},
+        "visualization_options": _visualization_options_summary(options),
     }
     if merged_map is not None:
         summary["merged"] = validate_escher_map(merged_map)
@@ -602,6 +609,36 @@ def _write_json(path: Path, data: Any) -> None:
         json.dump(data, file, indent=2)
 
 
+def _resolve_visualization_options(
+    options: VisualizationOptions | dict[str, Any] | None = None,
+    **overrides: Any,
+) -> VisualizationOptions:
+    return resolve_visualization_options(options, **overrides)
+
+
+def _mapper_visualization_kwargs(options: VisualizationOptions) -> dict[str, Any]:
+    return {
+        "scaling_factor": options.scaling_factor,
+        "axis_epsilon": options.axis_epsilon,
+        "markers_dist": options.markers_dist,
+        "metabolite_label_shift": options.metabolite_label_shift,
+        "reaction_label_shift": options.reaction_label_shift,
+        "canvas_margin_x": options.canvas_margin_x,
+        "canvas_margin_y": options.canvas_margin_y,
+        "multimarker_distance_fraction": options.multimarker_distance_fraction,
+        "use_constant_multimarker_distance": options.use_constant_multimarker_distance,
+        "constant_multimarker_distance": options.constant_multimarker_distance,
+        "axis_offset": options.axis_offset,
+    }
+
+
+def _visualization_options_summary(options: VisualizationOptions) -> dict[str, Any]:
+    data = asdict(options)
+    data["metabolite_label_shift"] = list(options.metabolite_label_shift)
+    data["reaction_label_shift"] = list(options.reaction_label_shift)
+    return data
+
+
 def _save_html(
     path: Path,
     map_json_path: Path,
@@ -623,17 +660,3 @@ def _save_html(
     builder = escher.Builder(**kwargs)
     builder.save_html(str(path))
 
-
-def _save_png(html_path: Path, png_path: Path) -> None:
-    try:
-        from playwright.sync_api import sync_playwright
-    except ImportError as exc:
-        raise RuntimeError("Saving PNG requires playwright.") from exc
-
-    with sync_playwright() as playwright:
-        browser = playwright.chromium.launch()
-        page = browser.new_page(viewport={"width": 1600, "height": 1200})
-        page.goto(html_path.resolve().as_uri())
-        page.wait_for_load_state("networkidle")
-        page.screenshot(path=str(png_path), full_page=True)
-        browser.close()

@@ -54,12 +54,20 @@ def build(args) -> None:
             database=args.database,
             scaling_factor=args.scaling_factor,
             axis_epsilon=args.axis_epsilon,
+            markers_dist=args.markers_dist,
+            metabolite_label_shift=args.metabolite_label_shift,
+            reaction_label_shift=args.reaction_label_shift,
+            canvas_margin_x=args.canvas_margin_x,
+            canvas_margin_y=args.canvas_margin_y,
+            multimarker_distance_fraction=args.multimarker_distance_fraction,
+            use_constant_multimarker_distance=args.use_constant_multimarker_distance,
+            constant_multimarker_distance=args.constant_multimarker_distance,
+            axis_offset=args.axis_offset,
             remove_orphan_metabolites=args.remove_orphan_metabolites,
             include_kegg_only=args.include_kegg_only,
             save_kegg_map=args.save_kegg_map,
             run_fba=args.run_fba,
             save_html=args.save_html,
-            save_png=args.save_png,
         )
         for name, path in result.paths.items():
             print(f"{name}: {path}")
@@ -79,12 +87,20 @@ def build(args) -> None:
         database=args.database,
         scaling_factor=args.scaling_factor,
         axis_epsilon=args.axis_epsilon,
+        markers_dist=args.markers_dist,
+        metabolite_label_shift=args.metabolite_label_shift,
+        reaction_label_shift=args.reaction_label_shift,
+        canvas_margin_x=args.canvas_margin_x,
+        canvas_margin_y=args.canvas_margin_y,
+        multimarker_distance_fraction=args.multimarker_distance_fraction,
+        use_constant_multimarker_distance=args.use_constant_multimarker_distance,
+        constant_multimarker_distance=args.constant_multimarker_distance,
+        axis_offset=args.axis_offset,
         remove_orphan_metabolites=args.remove_orphan_metabolites,
         include_kegg_only=args.include_kegg_only,
         save_kegg_map=args.save_kegg_map,
         run_fba=args.run_fba,
         save_html=args.save_html,
-        save_png=args.save_png,
     )
 
     for name, path in result.paths.items():
@@ -105,14 +121,26 @@ def main() -> None:
     build_parser.add_argument("--output")
     build_parser.add_argument("--output-dir")
     build_parser.add_argument("--database", choices=["BIGG", "SEED", "KEGG"], default="BIGG")
-    build_parser.add_argument("--scaling-factor", type=float, default=4)
-    build_parser.add_argument("--axis-epsilon", type=float, default=2)
+    build_parser.add_argument("--scaling-factor", type=float)
+    build_parser.add_argument("--axis-epsilon", type=float)
+    build_parser.add_argument("--markers-dist", type=float)
+    build_parser.add_argument("--metabolite-label-shift", nargs=2, type=float, metavar=("DX", "DY"))
+    build_parser.add_argument("--reaction-label-shift", nargs=2, type=float, metavar=("DX", "DY"))
+    build_parser.add_argument("--canvas-margin-x", type=float)
+    build_parser.add_argument("--canvas-margin-y", type=float)
+    build_parser.add_argument("--multimarker-distance-fraction", type=float)
+    build_parser.add_argument(
+        "--use-constant-multimarker-distance",
+        action="store_true",
+        default=None,
+    )
+    build_parser.add_argument("--constant-multimarker-distance", type=float)
+    build_parser.add_argument("--axis-offset", type=float)
     build_parser.add_argument("--remove-orphan-metabolites", action="store_true")
     build_parser.add_argument("--include-kegg-only", action="store_true")
     build_parser.add_argument("--save-kegg-map", action="store_true")
     build_parser.add_argument("--run-fba", action="store_true")
     build_parser.add_argument("--save-html", action="store_true")
-    build_parser.add_argument("--save-png", action="store_true")
     build_parser.add_argument("--no-merge", action="store_true")
     build_parser.add_argument("--map-stats", action="store_true")
     build_parser.set_defaults(func=build)
