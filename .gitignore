@@ -210,3 +210,6 @@ __marimo__/
 # custom
 metanetx_data/
 playground/
+.cobra_cache
+.pytest-cobra-cache
+.release-smoke
