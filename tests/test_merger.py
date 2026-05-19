@@ -6,7 +6,13 @@ from bioemma.workflow import validate_escher_map
 
 def _tiny_map(x_offset=0):
     return [
-        {"map_name": "tiny"},
+        {
+            "map_name": "tiny",
+            "map_id": "tiny",
+            "map_description": "",
+            "homepage": "https://escher.github.io",
+            "schema": "https://escher.github.io/escher/jsonschema/1-0-0#",
+        },
         {
             "nodes": {
                 "0": {"node_type": "metabolite", "x": x_offset, "y": 0},
@@ -41,10 +47,15 @@ def test_merger_offsets_node_ids_and_keeps_segments_valid():
 
     assert len(merged[1]["nodes"]) == 4
     assert len(merged[1]["reactions"]) == 2
-    assert validate_escher_map(merged)["bad_segment_refs"] == []
+    validation = validate_escher_map(merged, strict_json_keys=True)
+    assert validation["bad_segment_refs"] == []
+    assert validation["duplicate_segment_ids"] == []
+    assert validation["missing_description_keys"] == []
+    assert validation["missing_model_keys"] == []
 
     second_reaction = merged[1]["reactions"]["1"]
     segment = next(iter(second_reaction["segments"].values()))
+    assert next(iter(second_reaction["segments"].keys())) == "1"
     assert segment["from_node_id"] == "2"
     assert segment["to_node_id"] == "3"
     assert merged[1]["canvas"]["width"] > 0

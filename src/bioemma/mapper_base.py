@@ -65,6 +65,7 @@ class EscherMapper:
             "width": 1000,
             "height": 1000,
         }
+        self.map_stats = {}
 
     def build_kegg_map(self):
 
@@ -128,6 +129,7 @@ class EscherMapper:
 
     def build_map(self, cobra_model):
 
+        self.map_stats = {"stages": []}
         escher_map = []
 
         description = self._generate_description("test")
@@ -161,6 +163,13 @@ class EscherMapper:
             r_desc,
             global_nodes_idxs,
         )
+        self._record_map_stage(
+            "kegg_layout",
+            all_nodes,
+            r_desc,
+            r2indx_dict,
+            description="Initial Escher layout reconstructed from KEGG.",
+        )
 
         # extract and prepare data from model
         (
@@ -169,6 +178,12 @@ class EscherMapper:
             cobra_model_reactions,
             anti_reactions,
         ) = self._parse_model(cobra_model, m_desc, r_nodes)
+        self.map_stats["model_matching"] = {
+            "matched_metabolites": len(cobra_model_metabolites),
+            "unmatched_metabolites": len(anti_metabolites),
+            "matched_reactions": len(cobra_model_reactions),
+            "unmatched_reactions": len(anti_reactions),
+        }
         if not self.include_kegg_only:
             all_nodes, r2indx_dict = self._subtract_not_in_model_reactions(
                 global_nodes_idxs,
@@ -176,14 +191,46 @@ class EscherMapper:
                 anti_reactions,
                 r2indx_dict,
             )
+            self._record_map_stage(
+                "model_reaction_filter",
+                all_nodes,
+                r_desc,
+                r2indx_dict,
+                description="Removed KEGG reactions that were not matched to the COBRA model.",
+            )
             all_nodes = self._subtract_not_in_model_metabolites(
                 global_nodes_idxs,
                 all_nodes,
                 anti_metabolites,
             )
+            self._record_map_stage(
+                "model_metabolite_filter",
+                all_nodes,
+                r_desc,
+                r2indx_dict,
+                description="Removed KEGG metabolites that were not matched to the COBRA model.",
+            )
+        else:
+            self._record_map_stage(
+                "model_filter_skipped",
+                all_nodes,
+                r_desc,
+                r2indx_dict,
+                description="Kept KEGG-only reactions and metabolites.",
+            )
 
         if self.remove_orphan_metabolites:
             all_nodes = self._remove_orphan_metabolites(all_nodes, r_desc, r2indx_dict)
+            self._record_map_stage(
+                "orphan_metabolite_filter",
+                all_nodes,
+                r_desc,
+                r2indx_dict,
+                description=(
+                    "Removed primary metabolite nodes that are not referenced "
+                    "by any visible reaction."
+                ),
+            )
 
         secondary_data = self._extract_secondary_metabolites(cobra_model_reactions)
         all_nodes, r_desc = self._add_secondary_metabolites(
@@ -191,6 +238,13 @@ class EscherMapper:
             all_nodes,
             r_desc,
             global_nodes_idxs,
+        )
+        self._record_map_stage(
+            "secondary_metabolite_addition",
+            all_nodes,
+            r_desc,
+            r2indx_dict,
+            description="Added non-primary COBRA metabolites attached to matched reactions.",
         )
 
         model["nodes"] = {i:j for i,j in all_nodes.items() if j}
@@ -214,6 +268,12 @@ class EscherMapper:
             model["reactions"],
             model["canvas"],
         )
+        self._record_map_stage(
+            "final_layout",
+            model["nodes"],
+            model["reactions"],
+            description="Final Escher map after layout scaling and alignment.",
+        )
 
         escher_map.append(model)
 
@@ -230,6 +290,83 @@ class EscherMapper:
         }
 
         return desc
+
+    def _record_map_stage(
+        self,
+        name,
+        nodes,
+        reactions,
+        reaction_index=None,
+        description=None,
+    ):
+        counts = self._count_map_elements(nodes, reactions, reaction_index)
+        previous_counts = (
+            self.map_stats["stages"][-1]["counts"]
+            if self.map_stats.get("stages")
+            else None
+        )
+        entry = {
+            "name": name,
+            "counts": counts,
+            "change": self._count_delta(previous_counts, counts),
+        }
+        if description:
+            entry["description"] = description
+        self.map_stats.setdefault("stages", []).append(entry)
+
+    def _count_map_elements(self, nodes, reactions, reaction_index=None):
+        visible_nodes = [node for node in nodes.values() if node]
+        if reaction_index is None:
+            visible_reactions = [reaction for reaction in reactions.values() if reaction]
+        else:
+            visible_reactions = [
+                reactions[name]
+                for name in reactions
+                if reaction_index.get(name) is not None and reactions[name]
+            ]
+
+        segments = sum(len(reaction.get("segments", {})) for reaction in visible_reactions)
+        primary_metabolites = sum(
+            1
+            for node in visible_nodes
+            if node.get("node_type") == "metabolite" and node.get("node_is_primary")
+        )
+        secondary_metabolites = sum(
+            1
+            for node in visible_nodes
+            if node.get("node_type") == "metabolite"
+            and node.get("node_is_primary") is False
+        )
+        reaction_nodes = sum(1 for node in visible_nodes if node.get("node_type") == "midmarker")
+        multimarkers = sum(1 for node in visible_nodes if node.get("node_type") == "multimarker")
+
+        return {
+            "total_elements": len(visible_nodes) + len(visible_reactions) + segments,
+            "nodes": len(visible_nodes),
+            "primary_metabolites": primary_metabolites,
+            "secondary_metabolites": secondary_metabolites,
+            "reaction_nodes": reaction_nodes,
+            "multimarkers": multimarkers,
+            "reactions": len(visible_reactions),
+            "segments": segments,
+        }
+
+    def _count_delta(self, before, after):
+        if before is None:
+            return {
+                key: {"added": value, "removed": 0, "delta": value}
+                for key, value in after.items()
+            }
+
+        delta = {}
+        for key, value in after.items():
+            diff = value - before.get(key, 0)
+            delta[key] = {
+                "added": max(diff, 0),
+                "removed": max(-diff, 0),
+                "delta": diff,
+            }
+        return delta
     
     def _prepare_elements_descriptions(self, elements, generation_func):
 

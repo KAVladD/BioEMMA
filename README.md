@@ -53,20 +53,23 @@ kegg_reconstruction = result.kegg_reconstruction
 
 `escher_map` is a Python object compatible with the Escher JSON map structure,
 and `kegg_reconstruction` is a normalized analytical representation of the KEGG
-layout and mapped identifiers.
+layout and mapped identifiers. When `save_kegg_map=True`, BioEMMA also writes
+`kegg_escher_map.json`: a pure KEGG-layout Escher map before model filtering or
+secondary metabolite addition.
 
 With `output_dir`, BioEMMA writes:
 
 ```text
 out/rn00010/
-  map.json
-  kegg_reconstruction.json
+  escher_map.json
+  kegg_escher_map.json     # when save_kegg_map=True or --save-kegg-map
+  kegg_source_reconstruction.json
   summary.json
   fluxes.json              # when fluxes are provided or run_fba=True
-  map.html                 # when save_html=True or save_png=True
-  map.png                  # when save_png=True
-  map_with_fluxes.html     # when flux data and HTML/PNG output are requested
-  map_with_fluxes.png      # when flux data and PNG output are requested
+  escher_map.html          # when save_html=True or save_png=True
+  escher_map.png           # when save_png=True
+  escher_map_with_fluxes.html  # when flux data and HTML/PNG output are requested
+  escher_map_with_fluxes.png   # when flux data and PNG output are requested
 ```
 
 HTML output requires the `escher` package. PNG output additionally requires
@@ -103,7 +106,7 @@ For multiple inputs, BioEMMA writes each individual map into its own subfolder
 and writes a merged Escher map at:
 
 ```text
-out/merged_map.json
+out/merged_escher_map.json
 ```
 
 Use `--no-merge` to skip the merged map.
@@ -111,7 +114,22 @@ Use `--no-merge` to skip the merged map.
 The legacy single-file JSON output is still available:
 
 ```bash
-bioemma build --model path/to/model.xml --kgml path/to/rn00010.xml --output map.json
+bioemma build --model path/to/model.xml --kgml path/to/rn00010.xml --output escher_map.json
+```
+
+`summary.json` includes `map_stats`, a stage-by-stage count of total elements,
+nodes, reactions, and segments added or removed while the map is built. To print
+the same reduction statistics in the CLI, add `--map-stats`:
+
+```bash
+bioemma build --model path/to/model.xml --kgml path/to/rn00010.xml --output-dir out --map-stats
+```
+
+To save the unfiltered KEGG Escher map next to the normal model-derived map,
+add `--save-kegg-map`:
+
+```bash
+bioemma build --model path/to/model.xml --kgml path/to/rn00010.xml --output-dir out --save-kegg-map
 ```
 
 If cobrapy cannot access its default cache directory on Windows, set a local

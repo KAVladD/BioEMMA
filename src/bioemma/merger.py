@@ -95,29 +95,50 @@ class EscherMerger():
     
     def _merge_two_maps(self, base_emap, emap):
 
-        base_reactions_n = len(base_emap[1]["reactions"])
-        base_nodes_n = len(base_emap[1]["nodes"])
-        base_last_edges = base_emap[1]["reactions"][str(base_reactions_n-1)]["segments"]
+        base_reactions = base_emap[1]["reactions"]
+        base_nodes = base_emap[1]["nodes"]
 
-        base_edges_n = int(sorted(base_last_edges.keys())[-1])
+        next_reaction_id = self._next_numeric_key(base_reactions)
+        next_node_id = self._next_numeric_key(base_nodes)
+        next_segment_id = self._next_segment_id(base_reactions)
 
-        for key, reaction in emap[1]["reactions"].items():
-            
+        node_id_map = {}
+        for key, node in emap[1]["nodes"].items():
+            new_key = str(next_node_id)
+            next_node_id += 1
+            node_id_map[str(key)] = new_key
+            base_nodes[new_key] = node
+
+        for _key, reaction in emap[1]["reactions"].items():
+
             segments_buffer = {}
-            for s_key, segment in reaction["segments"].items():
-                segment["from_node_id"] = str(int(segment["from_node_id"]) + base_nodes_n)
-                segment["to_node_id"] = str(int(segment["to_node_id"]) + base_nodes_n)
+            for _s_key, segment in reaction["segments"].items():
+                segment["from_node_id"] = node_id_map[str(segment["from_node_id"])]
+                segment["to_node_id"] = node_id_map[str(segment["to_node_id"])]
 
-                segments_buffer[str(int(s_key) + base_edges_n)] = segment
+                segments_buffer[str(next_segment_id)] = segment
+                next_segment_id += 1
 
             reaction["segments"] = segments_buffer
-            base_emap[1]["reactions"][str(int(key) + base_reactions_n)] = reaction
-
-        for key, node in emap[1]["nodes"].items():
-
-            base_emap[1]["nodes"][str(int(key) + base_nodes_n)] = node
+            base_reactions[str(next_reaction_id)] = reaction
+            next_reaction_id += 1
 
         return base_emap
+
+    def _next_numeric_key(self, values):
+        if not values:
+            return 0
+        return max(int(key) for key in values.keys()) + 1
+
+    def _next_segment_id(self, reactions):
+        segment_ids = [
+            int(segment_id)
+            for reaction in reactions.values()
+            for segment_id in reaction.get("segments", {}).keys()
+        ]
+        if not segment_ids:
+            return 0
+        return max(segment_ids) + 1
     
     def _tune_canvas(self, emap):
 
