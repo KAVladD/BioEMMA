@@ -19,6 +19,8 @@ class VisualizationOptions:
     use_constant_multimarker_distance: bool = False
     constant_multimarker_distance: float = 300.0
     axis_offset: float = 20.0
+    secondary_metabolite_distance: float | None = None
+    secondary_metabolite_spacing: float | None = None
 
 
 def resolve_visualization_options(

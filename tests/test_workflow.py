@@ -254,8 +254,10 @@ def test_build_outputs_accepts_visualization_options(monkeypatch, tmp_path):
             canvas_margin_x=220,
             canvas_margin_y=180,
             axis_offset=25,
+            secondary_metabolite_distance=40,
         ),
         metabolite_label_shift=(8, 12),
+        secondary_metabolite_spacing=55,
     )
 
     options = result.summary["visualization_options"]
@@ -263,6 +265,8 @@ def test_build_outputs_accepts_visualization_options(monkeypatch, tmp_path):
     assert options["canvas_margin_x"] == 220
     assert options["axis_offset"] == 25
     assert options["metabolite_label_shift"] == [8, 12]
+    assert options["secondary_metabolite_distance"] == 40
+    assert options["secondary_metabolite_spacing"] == 55
 
 
 def test_cli_build_accepts_multiple_kgmls_and_merges(monkeypatch, tmp_path):

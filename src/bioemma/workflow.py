@@ -180,6 +180,8 @@ def build_escher_map(
     use_constant_multimarker_distance: bool | None = None,
     constant_multimarker_distance: float | None = None,
     axis_offset: float | None = None,
+    secondary_metabolite_distance: float | None = None,
+    secondary_metabolite_spacing: float | None = None,
     remove_orphan_metabolites: bool = False,
     include_kegg_only: bool = False,
 ) -> tuple[list[dict[str, Any]], dict[str, Any]]:
@@ -196,6 +198,8 @@ def build_escher_map(
         use_constant_multimarker_distance=use_constant_multimarker_distance,
         constant_multimarker_distance=constant_multimarker_distance,
         axis_offset=axis_offset,
+        secondary_metabolite_distance=secondary_metabolite_distance,
+        secondary_metabolite_spacing=secondary_metabolite_spacing,
     )
     cobra_model = load_model(model)
     kegg_map, source = load_kegg_map(pathway=pathway, kgml=kgml)
@@ -312,6 +316,8 @@ def build_outputs(
     use_constant_multimarker_distance: bool | None = None,
     constant_multimarker_distance: float | None = None,
     axis_offset: float | None = None,
+    secondary_metabolite_distance: float | None = None,
+    secondary_metabolite_spacing: float | None = None,
     remove_orphan_metabolites: bool = False,
     include_kegg_only: bool = False,
     save_kegg_map: bool = False,
@@ -330,6 +336,8 @@ def build_outputs(
         use_constant_multimarker_distance=use_constant_multimarker_distance,
         constant_multimarker_distance=constant_multimarker_distance,
         axis_offset=axis_offset,
+        secondary_metabolite_distance=secondary_metabolite_distance,
+        secondary_metabolite_spacing=secondary_metabolite_spacing,
     )
     cobra_model = load_model(model)
     kegg_map, source = load_kegg_map(pathway=pathway, kgml=kgml)
@@ -448,6 +456,8 @@ def build_many_outputs(
     use_constant_multimarker_distance: bool | None = None,
     constant_multimarker_distance: float | None = None,
     axis_offset: float | None = None,
+    secondary_metabolite_distance: float | None = None,
+    secondary_metabolite_spacing: float | None = None,
     remove_orphan_metabolites: bool = False,
     include_kegg_only: bool = False,
     save_kegg_map: bool = False,
@@ -466,6 +476,8 @@ def build_many_outputs(
         use_constant_multimarker_distance=use_constant_multimarker_distance,
         constant_multimarker_distance=constant_multimarker_distance,
         axis_offset=axis_offset,
+        secondary_metabolite_distance=secondary_metabolite_distance,
+        secondary_metabolite_spacing=secondary_metabolite_spacing,
     )
     if bool(pathways) == bool(kgmls):
         raise ValueError("Provide either pathways or kgmls.")
@@ -629,6 +641,8 @@ def _mapper_visualization_kwargs(options: VisualizationOptions) -> dict[str, Any
         "use_constant_multimarker_distance": options.use_constant_multimarker_distance,
         "constant_multimarker_distance": options.constant_multimarker_distance,
         "axis_offset": options.axis_offset,
+        "secondary_metabolite_distance": options.secondary_metabolite_distance,
+        "secondary_metabolite_spacing": options.secondary_metabolite_spacing,
     }
 
 
@@ -659,4 +673,3 @@ def _save_html(
 
     builder = escher.Builder(**kwargs)
     builder.save_html(str(path))
-

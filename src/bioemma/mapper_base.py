@@ -21,6 +21,8 @@ class EscherMapper:
                  use_constant_multimarker_distance: bool = False,
                  constant_multimarker_distance: float = 300,
                  axis_offset: float = 20,
+                 secondary_metabolite_distance: float | None = None,
+                 secondary_metabolite_spacing: float | None = None,
                  canvas_width: float = 1000,
                  canvas_height: float = 1000,
                  axis_epsilon: float = 2,):
@@ -54,6 +56,16 @@ class EscherMapper:
         self.mm_dist_const = float(constant_multimarker_distance)
         self.axis_epsilon = axis_epsilon
         self.axis_offset = float(axis_offset)
+        self.secondary_metabolite_distance = (
+            float(secondary_metabolite_distance)
+            if secondary_metabolite_distance is not None
+            else self.markers_dist * 2
+        )
+        self.secondary_metabolite_spacing = (
+            float(secondary_metabolite_spacing)
+            if secondary_metabolite_spacing is not None
+            else self.markers_dist * 3
+        )
         self.DB = database # SEED or BIGG
 
         self.segments_counter = 0
@@ -592,7 +604,10 @@ class EscherMapper:
             my_center_y = np.mean([p[1] for p in positions])
             offset_dir = np.sign(my_center_y - reaction_pos[1])
             offset_dir = offset_dir if offset_dir != 0 else 1
-            mm_y = reaction_pos[1] + self.axis_offset * offset_dir
+            offset = self._calc_multimarker_distance(
+                abs(my_center_y - reaction_pos[1])
+            )
+            mm_y = reaction_pos[1] + offset * offset_dir
             return [mm_x, mm_y]
         
         if common_axis_type == "horizontal":
@@ -600,7 +615,10 @@ class EscherMapper:
             my_center_x = np.mean([p[0] for p in positions])
             offset_dir = np.sign(my_center_x - reaction_pos[0])
             offset_dir = offset_dir if offset_dir != 0 else 1
-            mm_x = reaction_pos[0] + self.axis_offset * offset_dir
+            offset = self._calc_multimarker_distance(
+                abs(my_center_x - reaction_pos[0])
+            )
+            mm_x = reaction_pos[0] + offset * offset_dir
             return [mm_x, mm_y]
         
         aligned_type, aligned_pos = self._find_aligned_metabolite(positions, reaction_pos)
@@ -614,7 +632,10 @@ class EscherMapper:
                 
                 offset_dir = np.sign(aligned_pos[0] - reaction_pos[0])
                 offset_dir = offset_dir if offset_dir != 0 else 1
-                mm_x = reaction_pos[0] + self.axis_offset * offset_dir
+                offset = self._calc_multimarker_distance(
+                    abs(aligned_pos[0] - reaction_pos[0])
+                )
+                mm_x = reaction_pos[0] + offset * offset_dir
                 
                 return [mm_x, mm_y]
 
@@ -623,7 +644,10 @@ class EscherMapper:
                 
                 offset_dir = np.sign(aligned_pos[1] - reaction_pos[1])
                 offset_dir = offset_dir if offset_dir != 0 else 1
-                mm_y = reaction_pos[1] + self.axis_offset * offset_dir
+                offset = self._calc_multimarker_distance(
+                    abs(aligned_pos[1] - reaction_pos[1])
+                )
+                mm_y = reaction_pos[1] + offset * offset_dir
                 
                 return [mm_x, mm_y]
         
@@ -678,6 +702,16 @@ class EscherMapper:
                 best_pos = pos
         
         return best_type, best_pos
+
+    def _calc_multimarker_distance(self, base_distance):
+        if self.use_const_mm_dist:
+            return self.mm_dist_const
+
+        offset = base_distance * self.mm_dist_part
+        if offset > 0:
+            return offset
+
+        return self.axis_offset
     
     def _find_nearest_opposite_coord(self, reaction_pos, opposite_mets, coord_idx):
         """
@@ -702,15 +736,12 @@ class EscherMapper:
         center = np.mean(positions, axis=0)
         vec = center - reaction_pos
         
-        if self.use_const_mm_dist:
-            norm = np.linalg.norm(vec)
-            if norm > 0:
-                norm_vec = vec / norm
-                shift = norm_vec * self.mm_dist_const
-            else:
-                shift = np.array([self.mm_dist_const, 0])
+        norm = np.linalg.norm(vec)
+        if norm > 0:
+            norm_vec = vec / norm
+            shift = norm_vec * self._calc_multimarker_distance(norm)
         else:
-            shift = vec * self.mm_dist_part
+            shift = np.array([self._calc_multimarker_distance(0), 0])
         
         return (reaction_pos + shift).tolist()
 
@@ -1088,10 +1119,21 @@ class EscherMapper:
         side: -1 for substrates, +1 for products.
         """
 
-        lateral_offset = (-(total - 1) / 2.0 + index) * self.markers_dist * 3
-        pos = anchor_pos + side * reaction_dir * self.markers_dist * 2 + perp * lateral_offset
+        lateral_offset = self._calc_secondary_lateral_offset(index, total)
+        pos = (
+            anchor_pos
+            + side * reaction_dir * self.secondary_metabolite_distance
+            + perp * lateral_offset
+        )
 
         return pos.tolist()
+
+    def _calc_secondary_lateral_offset(self, index, total):
+        lane = -(total - 1) / 2.0 + index
+        if lane == 0:
+            lane = 0.5
+
+        return lane * self.secondary_metabolite_spacing
 
 
     def _generate_secondary_metabolite_dict(self, bigg_id, name, pos):

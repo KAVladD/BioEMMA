@@ -93,14 +93,21 @@ result = build_outputs(
         reaction_label_shift=(10, 10),
         canvas_margin_x=160,
         canvas_margin_y=160,
+        multimarker_distance_fraction=0.3,
+        use_constant_multimarker_distance=False,
+        constant_multimarker_distance=300,
         axis_offset=20,
+        secondary_metabolite_distance=None,
+        secondary_metabolite_spacing=None,
     ),
 )
 ```
 
 The defaults are conservative starting values for KEGG layouts: coordinates are
 scaled up for Escher readability, aligned reaction lanes keep a small tolerance,
-and secondary metabolites get enough spacing after scaling.
+multimarkers sit a fraction of the way from reactions to main metabolites by
+default, and secondary metabolites inherit `markers_dist * 2` distance plus
+`markers_dist * 3` spacing unless overridden directly.
 
 ## Command Line Usage
 

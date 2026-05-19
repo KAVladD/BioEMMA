@@ -63,6 +63,8 @@ def build(args) -> None:
             use_constant_multimarker_distance=args.use_constant_multimarker_distance,
             constant_multimarker_distance=args.constant_multimarker_distance,
             axis_offset=args.axis_offset,
+            secondary_metabolite_distance=args.secondary_metabolite_distance,
+            secondary_metabolite_spacing=args.secondary_metabolite_spacing,
             remove_orphan_metabolites=args.remove_orphan_metabolites,
             include_kegg_only=args.include_kegg_only,
             save_kegg_map=args.save_kegg_map,
@@ -96,6 +98,8 @@ def build(args) -> None:
         use_constant_multimarker_distance=args.use_constant_multimarker_distance,
         constant_multimarker_distance=args.constant_multimarker_distance,
         axis_offset=args.axis_offset,
+        secondary_metabolite_distance=args.secondary_metabolite_distance,
+        secondary_metabolite_spacing=args.secondary_metabolite_spacing,
         remove_orphan_metabolites=args.remove_orphan_metabolites,
         include_kegg_only=args.include_kegg_only,
         save_kegg_map=args.save_kegg_map,
@@ -136,6 +140,8 @@ def main() -> None:
     )
     build_parser.add_argument("--constant-multimarker-distance", type=float)
     build_parser.add_argument("--axis-offset", type=float)
+    build_parser.add_argument("--secondary-metabolite-distance", type=float)
+    build_parser.add_argument("--secondary-metabolite-spacing", type=float)
     build_parser.add_argument("--remove-orphan-metabolites", action="store_true")
     build_parser.add_argument("--include-kegg-only", action="store_true")
     build_parser.add_argument("--save-kegg-map", action="store_true")
