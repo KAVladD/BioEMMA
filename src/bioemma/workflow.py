@@ -183,6 +183,7 @@ def build_escher_map(
     secondary_metabolite_distance: float | None = None,
     secondary_metabolite_spacing: float | None = None,
     remove_orphan_metabolites: bool = False,
+    remove_free_metabolites: bool = False,
     include_kegg_only: bool = False,
 ) -> tuple[list[dict[str, Any]], dict[str, Any]]:
     options = _resolve_visualization_options(
@@ -210,7 +211,7 @@ def build_escher_map(
         reactions=kegg_reconstruction["reactions"],
         database=database,
         **_mapper_visualization_kwargs(options),
-        remove_orphan_metabolites=remove_orphan_metabolites,
+        remove_orphan_metabolites=remove_orphan_metabolites or remove_free_metabolites,
         include_kegg_only=include_kegg_only,
     )
     escher_map = mapper.build_map(cobra_model)
@@ -319,6 +320,7 @@ def build_outputs(
     secondary_metabolite_distance: float | None = None,
     secondary_metabolite_spacing: float | None = None,
     remove_orphan_metabolites: bool = False,
+    remove_free_metabolites: bool = False,
     include_kegg_only: bool = False,
     save_kegg_map: bool = False,
     save_html: bool = False,
@@ -348,7 +350,7 @@ def build_outputs(
         reactions=kegg_reconstruction["reactions"],
         database=database,
         **_mapper_visualization_kwargs(options),
-        remove_orphan_metabolites=remove_orphan_metabolites,
+        remove_orphan_metabolites=remove_orphan_metabolites or remove_free_metabolites,
         include_kegg_only=include_kegg_only,
     )
     escher_map = mapper.build_map(cobra_model)
@@ -459,6 +461,7 @@ def build_many_outputs(
     secondary_metabolite_distance: float | None = None,
     secondary_metabolite_spacing: float | None = None,
     remove_orphan_metabolites: bool = False,
+    remove_free_metabolites: bool = False,
     include_kegg_only: bool = False,
     save_kegg_map: bool = False,
     save_html: bool = False,
@@ -502,7 +505,7 @@ def build_many_outputs(
                 run_fba=run_fba,
                 database=database,
                 visualization_options=options,
-                remove_orphan_metabolites=remove_orphan_metabolites,
+                remove_orphan_metabolites=remove_orphan_metabolites or remove_free_metabolites,
                 include_kegg_only=include_kegg_only,
                 save_kegg_map=save_kegg_map,
                 save_html=save_html,

@@ -242,6 +242,33 @@ def test_secondary_metabolite_spacing_options_affect_positions():
     assert mapper._calc_secondary_lateral_offset(1, 3) != 0
 
 
+def test_remove_orphan_metabolites_removes_all_unreferenced_metabolite_nodes():
+    mapper = EscherMapper({}, {})
+    all_nodes = {
+        1: {"node_type": "metabolite", "bigg_id": "primary", "node_is_primary": True},
+        2: {"node_type": "metabolite", "bigg_id": "secondary", "node_is_primary": False},
+        3: {"node_type": "metabolite", "bigg_id": "connected", "node_is_primary": True},
+        4: {"node_type": "midmarker"},
+    }
+    r_desc = {
+        "visible": {
+            "segments": {
+                0: {
+                    "from_node_id": 3,
+                    "to_node_id": 4,
+                }
+            }
+        }
+    }
+    r2indx_dict = {"visible": 0}
+
+    mapper._remove_orphan_metabolites(all_nodes, r_desc, r2indx_dict)
+
+    assert all_nodes[1] is None
+    assert all_nodes[2] is None
+    assert all_nodes[3] is not None
+
+
 def test_build_map_adds_secondary_metabolites_and_valid_segments(monkeypatch, tmp_path):
     cache_root = tmp_path / "cobra-cache"
     monkeypatch.setenv("BIOEMMA_COBRA_CACHE_DIR", str(cache_root))

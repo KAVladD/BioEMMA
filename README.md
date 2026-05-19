@@ -225,6 +225,11 @@ matched to the COBRA model. To preserve KEGG-only elements that are not present
 in the model, pass `include_kegg_only=True` in Python or use
 `--include-kegg-only` in the CLI.
 
+To remove metabolite nodes that are not connected to any visible reaction, pass
+`remove_free_metabolites=True` in Python or use `--remove-free-metabolites` in
+the CLI. The older `remove_orphan_metabolites=True` and
+`--remove-orphan-metabolites` names are still supported as aliases.
+
 ## Development Notes
 
 The package code lives in:

@@ -241,19 +241,6 @@ class EscherMapper:
                 description="Kept KEGG-only reactions and metabolites.",
             )
 
-        if self.remove_orphan_metabolites:
-            all_nodes = self._remove_orphan_metabolites(all_nodes, r_desc, r2indx_dict)
-            self._record_map_stage(
-                "orphan_metabolite_filter",
-                all_nodes,
-                r_desc,
-                r2indx_dict,
-                description=(
-                    "Removed primary metabolite nodes that are not referenced "
-                    "by any visible reaction."
-                ),
-            )
-
         secondary_data = self._extract_secondary_metabolites(cobra_model_reactions)
         all_nodes, r_desc = self._add_secondary_metabolites(
             secondary_data,
@@ -268,6 +255,19 @@ class EscherMapper:
             r2indx_dict,
             description="Added non-primary COBRA metabolites attached to matched reactions.",
         )
+
+        if self.remove_orphan_metabolites:
+            all_nodes = self._remove_orphan_metabolites(all_nodes, r_desc, r2indx_dict)
+            self._record_map_stage(
+                "orphan_metabolite_filter",
+                all_nodes,
+                r_desc,
+                r2indx_dict,
+                description=(
+                    "Removed metabolite nodes that are not referenced "
+                    "by any visible reaction."
+                ),
+            )
 
         model["nodes"] = {i:j for i,j in all_nodes.items() if j}
         
@@ -1195,7 +1195,6 @@ class EscherMapper:
             if (
                 node
                 and node.get("node_type") == "metabolite"
-                and node.get("node_is_primary")
                 and nid not in referenced_nodes
             ):
                 all_nodes[nid] = None

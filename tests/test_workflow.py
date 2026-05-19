@@ -35,6 +35,21 @@ def _assert_valid_saved_escher_map(path):
     return escher_map
 
 
+def _isolated_metabolites(escher_map):
+    model = escher_map[1]
+    referenced_nodes = {
+        str(segment[node_key])
+        for reaction in model["reactions"].values()
+        for segment in reaction.get("segments", {}).values()
+        for node_key in ("from_node_id", "to_node_id")
+    }
+    return [
+        node
+        for node_id, node in model["nodes"].items()
+        if node.get("node_type") == "metabolite" and str(node_id) not in referenced_nodes
+    ]
+
+
 def test_build_outputs_returns_and_saves_core_artifacts(monkeypatch, tmp_path):
     _set_cobra_cache(monkeypatch, tmp_path)
 
@@ -114,6 +129,23 @@ def test_build_outputs_can_include_kegg_only_elements(monkeypatch, tmp_path):
     validation = validate_escher_map(result.escher_map)
     assert validation["reactions"] == result.kegg_reconstruction["counts"]["reactions"]
     assert validation["bad_segment_refs"] == []
+
+
+def test_build_outputs_can_remove_free_metabolites(monkeypatch, tmp_path):
+    _set_cobra_cache(monkeypatch, tmp_path)
+
+    result = build_outputs(
+        model=MODEL,
+        kgml=KGML,
+        database="BIGG",
+        scaling_factor=5,
+        axis_epsilon=10,
+        remove_free_metabolites=True,
+    )
+
+    stages = {stage["name"]: stage for stage in result.summary["map_stats"]["stages"]}
+    assert _isolated_metabolites(result.escher_map) == []
+    assert stages["orphan_metabolite_filter"]["change"]["nodes"]["removed"] > 0
 
 
 def test_cli_build_writes_workflow_outputs(monkeypatch, tmp_path):

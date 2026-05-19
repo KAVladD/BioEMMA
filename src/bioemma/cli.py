@@ -142,7 +142,12 @@ def main() -> None:
     build_parser.add_argument("--axis-offset", type=float)
     build_parser.add_argument("--secondary-metabolite-distance", type=float)
     build_parser.add_argument("--secondary-metabolite-spacing", type=float)
-    build_parser.add_argument("--remove-orphan-metabolites", action="store_true")
+    build_parser.add_argument(
+        "--remove-orphan-metabolites",
+        "--remove-free-metabolites",
+        action="store_true",
+        dest="remove_orphan_metabolites",
+    )
     build_parser.add_argument("--include-kegg-only", action="store_true")
     build_parser.add_argument("--save-kegg-map", action="store_true")
     build_parser.add_argument("--run-fba", action="store_true")
