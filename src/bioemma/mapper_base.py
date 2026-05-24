@@ -23,6 +23,8 @@ class EscherMapper:
                  axis_offset: float = 20,
                  secondary_metabolite_distance: float | None = None,
                  secondary_metabolite_spacing: float | None = None,
+                 use_model_metabolite_ids: bool = False,
+                 metabolite_id_compartments: bool | None = None,
                  canvas_width: float = 1000,
                  canvas_height: float = 1000,
                  axis_epsilon: float = 2,):
@@ -67,6 +69,12 @@ class EscherMapper:
             else self.markers_dist * 3
         )
         self.DB = database # SEED or BIGG
+        self.use_model_metabolite_ids = use_model_metabolite_ids
+        self.metabolite_id_compartments = (
+            self.DB == "BIGG"
+            if metabolite_id_compartments is None
+            else bool(metabolite_id_compartments)
+        )
 
         self.segments_counter = 0
 
@@ -200,6 +208,23 @@ class EscherMapper:
             model_reaction_bigg_ids,
         ) = self._parse_model(cobra_model, m_desc, r_nodes)
         self._apply_model_reaction_bigg_ids(r_desc, model_reaction_bigg_ids)
+        if self.use_model_metabolite_ids:
+            self._apply_model_metabolite_ids(
+                all_nodes,
+                r_desc,
+                global_nodes_idxs,
+                cobra_model_metabolites,
+            )
+            self._record_map_stage(
+                "model_metabolite_id_application",
+                all_nodes,
+                r_desc,
+                r2indx_dict,
+                description=(
+                    "Applied COBRA model metabolite identifiers to matched "
+                    "KEGG metabolites."
+                ),
+            )
         self.map_stats["model_matching"] = {
             "matched_metabolites": len(cobra_model_metabolites),
             "unmatched_metabolites": len(anti_metabolites),
@@ -834,7 +859,7 @@ class EscherMapper:
             model,
             r_nodes,
         )
-        ms, anti_ms = self._extract_model_metabolites(model, m_nodes)
+        ms, anti_ms = self._extract_model_metabolites(model, m_nodes, matched_rs)
 
         return ms, anti_ms, matched_rs, anti_rs, model_reaction_bigg_ids
     
@@ -901,32 +926,160 @@ class EscherMapper:
             if r_name in r_desc:
                 r_desc[r_name]["bigg_id"] = bigg_id
 
-    def _extract_model_metabolites(self, model, m_nodes):
+    def _apply_model_metabolite_ids(
+        self,
+        all_nodes,
+        r_desc,
+        global_idxs,
+        model_metabolites,
+    ):
+        for m_name, model_metabolite in model_metabolites.items():
+            model_id = self._model_metabolite_output_id(model_metabolite, m_name)
+            compartment = self._model_metabolite_compartment(model_metabolite)
 
-        model_ids = {"KEGG": set(), "BIGG": set(), "SEED": set()}
+            node_idx = global_idxs["metabolites"].get(m_name)
+            if node_idx is not None and all_nodes.get(node_idx) is not None:
+                all_nodes[node_idx]["bigg_id"] = model_id
+                if self.metabolite_id_compartments and compartment:
+                    all_nodes[node_idx]["compartment"] = compartment
 
-        for met in model.metabolites:
-            for k in model_ids.keys():
-                key = f'{k.lower()}.{"metabolite" if k == "BIGG" else "compound"}'
-                names = met.annotation.get(key, [])
-                names = names if isinstance(names, list) else [names]
-                model_ids[k] |= set(names)
+            map_ids = self._map_metabolite_ids(m_name)
+            for reaction in r_desc.values():
+                for reaction_metabolite in reaction.get("metabolites", []):
+                    values = {
+                        reaction_metabolite.get("kegg_id"),
+                        reaction_metabolite.get("bigg_id"),
+                        reaction_metabolite.get("seed_id"),
+                    }
+                    if values & map_ids:
+                        reaction_metabolite["bigg_id"] = model_id
+                        if self.metabolite_id_compartments and compartment:
+                            reaction_metabolite["compartment"] = compartment
+
+    def _extract_model_metabolites(self, model, m_nodes, matched_rs=None):
 
         ms = {}
         anti_ms = []
 
         for m_name in m_nodes.keys():
+            candidates = self._find_connected_model_metabolite_candidates(
+                m_name,
+                matched_rs or {},
+            )
+            if not candidates:
+                candidates = [
+                    (met, 1)
+                    for met in model.metabolites
+                    if self._model_metabolite_matches_map_metabolite(met, m_name)
+                ]
 
-            keggs = {m_name}
-            biggs = set(self.m_mapper[m_name].bigg_all) if self.m_mapper.get(m_name) else set()
-            seeds = set(self.m_mapper[m_name].seed_all) if self.m_mapper.get(m_name) else set()
-
-            if keggs & model_ids["KEGG"] or biggs & model_ids["BIGG"] or seeds & model_ids["SEED"]:
-                ms[m_name] = True
+            if candidates:
+                ms[m_name] = self._select_model_metabolite_candidate(candidates)
             else:
                 anti_ms.append(m_name)
 
         return ms, anti_ms
+
+    def _find_connected_model_metabolite_candidates(self, m_name, matched_rs):
+        candidate_counts = {}
+
+        for r_name, cobra_rxn in matched_rs.items():
+            reaction = self.reactions.get(r_name, {})
+            primary_metabolites = set(reaction.get("substrates", {}).get("main", []))
+            primary_metabolites.update(reaction.get("products", {}).get("main", []))
+            if m_name not in primary_metabolites:
+                continue
+
+            for met in cobra_rxn.metabolites:
+                if self._model_metabolite_matches_map_metabolite(met, m_name):
+                    candidate_counts[met] = candidate_counts.get(met, 0) + 1
+
+        return list(candidate_counts.items())
+
+    def _select_model_metabolite_candidate(self, candidates):
+        return sorted(candidates, key=lambda item: (-item[1], item[0].id))[0][0]
+
+    def _model_metabolite_matches_map_metabolite(self, met, m_name):
+        return bool(self._model_metabolite_ids(met) & self._map_metabolite_ids(m_name))
+
+    def _map_metabolite_ids(self, m_name):
+        ids = {m_name}
+        m_data = self.metabolites.get(m_name, {})
+        for value in m_data.get("ids", {}).values():
+            if value:
+                ids.add(str(value))
+
+        mapped = self.m_mapper.get(m_name)
+        if mapped:
+            ids.update(str(value) for value in mapped.bigg_all if value)
+            ids.update(str(value) for value in mapped.seed_all if value)
+
+        return ids
+
+    def _model_metabolite_ids(self, met):
+        ids = {str(met.id)}
+        stripped_id = self._strip_model_compartment(met.id, self._model_metabolite_compartment(met))
+        if stripped_id:
+            ids.add(stripped_id)
+
+        for key in ["kegg.compound", "bigg.metabolite", "seed.compound"]:
+            ids.update(self._annotation_values(met.annotation, key))
+
+        return {value for value in ids if value}
+
+    def _model_metabolite_output_id(self, met, m_name=None):
+        if self.DB == "BIGG":
+            if self.metabolite_id_compartments:
+                return met.id
+            return (
+                self._select_annotation_value(met, "bigg.metabolite", m_name)
+                or self._strip_model_compartment(met.id, self._model_metabolite_compartment(met))
+                or met.id
+            )
+        if self.DB == "SEED":
+            return (
+                self._select_annotation_value(met, "seed.compound", m_name)
+                or self._strip_model_compartment(met.id, self._model_metabolite_compartment(met))
+                or met.id
+            )
+        if self.DB == "KEGG":
+            return (
+                self._select_annotation_value(met, "kegg.compound", m_name)
+                or self._strip_model_compartment(met.id, self._model_metabolite_compartment(met))
+                or met.id
+            )
+        return met.id
+
+    def _select_annotation_value(self, met, key, m_name=None):
+        values = self._annotation_values(met.annotation, key)
+        if not values:
+            return None
+
+        if m_name is not None:
+            preferred = self._map_metabolite_ids(m_name)
+            for value in values:
+                if value in preferred:
+                    return value
+
+        return values[0]
+
+    def _model_metabolite_compartment(self, met):
+        compartment = getattr(met, "compartment", None)
+        return str(compartment) if compartment else None
+
+    def _strip_model_compartment(self, metabolite_id, compartment):
+        if compartment and metabolite_id.endswith(f"_{compartment}"):
+            return metabolite_id[: -(len(compartment) + 1)]
+        return metabolite_id
+
+    def _reaction_metabolite_entry(self, entry):
+        reaction_metabolite = {
+            "bigg_id": entry["bigg_id"],
+            "coefficient": entry["coefficient"],
+        }
+        if entry.get("compartment"):
+            reaction_metabolite["compartment"] = entry["compartment"]
+        return reaction_metabolite
     
     def _subtract_not_in_model_reactions(self, global_idxs, all_nodes, anti_rs, r2indx_dict):
 
@@ -984,7 +1137,20 @@ class EscherMapper:
                 if met_ids & main_met_ids:
                     continue
 
-                entry = {"bigg_id": met.id, "name": met.name, "coefficient": coef}
+                entry = {
+                    "bigg_id": self._model_metabolite_output_id(met)
+                    if self.use_model_metabolite_ids
+                    else met.id,
+                    "name": met.name,
+                    "coefficient": coef,
+                }
+                compartment = self._model_metabolite_compartment(met)
+                if (
+                    self.use_model_metabolite_ids
+                    and self.metabolite_id_compartments
+                    and compartment
+                ):
+                    entry["compartment"] = compartment
 
                 if coef < 0:
                     sec_subs.append(entry)
@@ -1057,6 +1223,7 @@ class EscherMapper:
                         entry["bigg_id"],
                         entry["name"],
                         pos,
+                        compartment=entry.get("compartment"),
                     )
                     all_nodes[max_node_idx] = node
                     r_desc[r_name]["segments"][seg_counter] = self._prepare_edge_dict(
@@ -1064,10 +1231,7 @@ class EscherMapper:
                         in_mm_idx,
                     )
                     r_desc[r_name]["metabolites"].append(
-                        {
-                            "bigg_id": entry["bigg_id"],
-                            "coefficient": entry["coefficient"],
-                        }
+                        self._reaction_metabolite_entry(entry)
                     )
                     seg_counter += 1
                     max_node_idx += 1
@@ -1090,6 +1254,7 @@ class EscherMapper:
                         entry["bigg_id"],
                         entry["name"],
                         pos,
+                        compartment=entry.get("compartment"),
                     )
                     all_nodes[max_node_idx] = node
                     r_desc[r_name]["segments"][seg_counter] = self._prepare_edge_dict(
@@ -1097,10 +1262,7 @@ class EscherMapper:
                         max_node_idx,
                     )
                     r_desc[r_name]["metabolites"].append(
-                        {
-                            "bigg_id": entry["bigg_id"],
-                            "coefficient": entry["coefficient"],
-                        }
+                        self._reaction_metabolite_entry(entry)
                     )
                     seg_counter += 1
                     max_node_idx += 1
@@ -1168,9 +1330,9 @@ class EscherMapper:
         return lane * self.secondary_metabolite_spacing
 
 
-    def _generate_secondary_metabolite_dict(self, bigg_id, name, pos):
+    def _generate_secondary_metabolite_dict(self, bigg_id, name, pos, compartment=None):
 
-        return {
+        node = {
             "node_type": "metabolite",
             "bigg_id": bigg_id,
             "name": name,
@@ -1180,6 +1342,9 @@ class EscherMapper:
             "label_x": pos[0] + self.metabolite_label_shift[0],
             "label_y": pos[1] + self.metabolite_label_shift[1],
         }
+        if compartment:
+            node["compartment"] = compartment
+        return node
     
     def _remove_orphan_metabolites(self, all_nodes, r_desc, r2indx_dict):
 

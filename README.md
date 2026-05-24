@@ -97,6 +97,30 @@ This avoids cases where a KEGG reaction such as `R01518` matches model reaction
 `fluxes.json`; future workflow code may add an explicit flux remapping summary
 for Escher overlays.
 
+### Model metabolite IDs
+
+By default, primary metabolites keep the bundled KEGG-to-database aliases,
+while secondary metabolites are added from COBRA model metabolites. To make
+primary and secondary metabolite IDs come from the COBRA model consistently,
+enable model metabolite IDs:
+
+```python
+result = build_outputs(
+    model="path/to/model.xml",
+    pathway="rn00010",
+    output_dir="out",
+    database="BIGG",
+    use_model_metabolite_ids=True,
+    metabolite_id_compartments=True,
+)
+```
+
+For BiGG maps, `metabolite_id_compartments=True` uses native COBRA metabolite
+IDs such as `glc__D_e` and `nad_c`. For KEGG and SEED maps, BioEMMA keeps the
+database identifier itself valid and stores the model compartment separately in
+the optional `compartment` field, because those identifiers do not natively
+encode model compartments in the bundled mappings.
+
 Visualization layout settings can be tuned with `VisualizationOptions`:
 
 ```python
@@ -193,6 +217,11 @@ The same visualization settings are available in the CLI, for example:
 ```bash
 bioemma build --model path/to/model.xml --kgml path/to/rn00010.xml --output-dir out --scaling-factor 4 --canvas-margin-x 160 --canvas-margin-y 160
 ```
+
+To use COBRA model metabolite IDs from the CLI, add
+`--use-model-metabolite-ids`. Use `--metabolite-id-compartments` or
+`--no-metabolite-id-compartments` to control whether model compartments are
+included where the selected database representation supports them.
 
 If cobrapy cannot access its default cache directory on Windows, set a local
 cache directory before running tests or CLI commands:

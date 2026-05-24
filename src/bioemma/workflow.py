@@ -185,6 +185,8 @@ def build_escher_map(
     remove_orphan_metabolites: bool = False,
     remove_free_metabolites: bool = False,
     include_kegg_only: bool = False,
+    use_model_metabolite_ids: bool = False,
+    metabolite_id_compartments: bool | None = None,
 ) -> tuple[list[dict[str, Any]], dict[str, Any]]:
     options = _resolve_visualization_options(
         visualization_options,
@@ -213,6 +215,8 @@ def build_escher_map(
         **_mapper_visualization_kwargs(options),
         remove_orphan_metabolites=remove_orphan_metabolites or remove_free_metabolites,
         include_kegg_only=include_kegg_only,
+        use_model_metabolite_ids=use_model_metabolite_ids,
+        metabolite_id_compartments=metabolite_id_compartments,
     )
     escher_map = mapper.build_map(cobra_model)
     kegg_reconstruction["map_stats"] = mapper.map_stats
@@ -322,6 +326,8 @@ def build_outputs(
     remove_orphan_metabolites: bool = False,
     remove_free_metabolites: bool = False,
     include_kegg_only: bool = False,
+    use_model_metabolite_ids: bool = False,
+    metabolite_id_compartments: bool | None = None,
     save_kegg_map: bool = False,
     save_html: bool = False,
 ) -> BioEmmaResult:
@@ -352,6 +358,8 @@ def build_outputs(
         **_mapper_visualization_kwargs(options),
         remove_orphan_metabolites=remove_orphan_metabolites or remove_free_metabolites,
         include_kegg_only=include_kegg_only,
+        use_model_metabolite_ids=use_model_metabolite_ids,
+        metabolite_id_compartments=metabolite_id_compartments,
     )
     escher_map = mapper.build_map(cobra_model)
     kegg_escher_map = None
@@ -375,6 +383,10 @@ def build_outputs(
         "map_stats": mapper.map_stats,
         "has_fluxes": coerced_fluxes is not None,
         "visualization_options": _visualization_options_summary(options),
+        "metabolite_id_options": {
+            "use_model_metabolite_ids": use_model_metabolite_ids,
+            "metabolite_id_compartments": mapper.metabolite_id_compartments,
+        },
     }
     if kegg_escher_map is not None:
         summary["kegg_escher"] = validate_escher_map(kegg_escher_map)
@@ -463,6 +475,8 @@ def build_many_outputs(
     remove_orphan_metabolites: bool = False,
     remove_free_metabolites: bool = False,
     include_kegg_only: bool = False,
+    use_model_metabolite_ids: bool = False,
+    metabolite_id_compartments: bool | None = None,
     save_kegg_map: bool = False,
     save_html: bool = False,
 ) -> BioEmmaBatchResult:
@@ -507,6 +521,8 @@ def build_many_outputs(
                 visualization_options=options,
                 remove_orphan_metabolites=remove_orphan_metabolites or remove_free_metabolites,
                 include_kegg_only=include_kegg_only,
+                use_model_metabolite_ids=use_model_metabolite_ids,
+                metabolite_id_compartments=metabolite_id_compartments,
                 save_kegg_map=save_kegg_map,
                 save_html=save_html,
                 **kwargs,
@@ -554,6 +570,13 @@ def build_many_outputs(
         "items": [result.summary for result in results],
         "paths": {key: str(path) for key, path in paths.items()},
         "visualization_options": _visualization_options_summary(options),
+        "metabolite_id_options": {
+            "use_model_metabolite_ids": use_model_metabolite_ids,
+            "metabolite_id_compartments": _resolve_metabolite_id_compartments(
+                database,
+                metabolite_id_compartments,
+            ),
+        },
     }
     if merged_map is not None:
         summary["merged"] = validate_escher_map(merged_map)
@@ -647,6 +670,10 @@ def _mapper_visualization_kwargs(options: VisualizationOptions) -> dict[str, Any
         "secondary_metabolite_distance": options.secondary_metabolite_distance,
         "secondary_metabolite_spacing": options.secondary_metabolite_spacing,
     }
+
+
+def _resolve_metabolite_id_compartments(database: str, value: bool | None) -> bool:
+    return database == "BIGG" if value is None else bool(value)
 
 
 def _visualization_options_summary(options: VisualizationOptions) -> dict[str, Any]:

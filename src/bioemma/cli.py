@@ -67,6 +67,8 @@ def build(args) -> None:
             secondary_metabolite_spacing=args.secondary_metabolite_spacing,
             remove_orphan_metabolites=args.remove_orphan_metabolites,
             include_kegg_only=args.include_kegg_only,
+            use_model_metabolite_ids=args.use_model_metabolite_ids,
+            metabolite_id_compartments=args.metabolite_id_compartments,
             save_kegg_map=args.save_kegg_map,
             run_fba=args.run_fba,
             save_html=args.save_html,
@@ -102,6 +104,8 @@ def build(args) -> None:
         secondary_metabolite_spacing=args.secondary_metabolite_spacing,
         remove_orphan_metabolites=args.remove_orphan_metabolites,
         include_kegg_only=args.include_kegg_only,
+        use_model_metabolite_ids=args.use_model_metabolite_ids,
+        metabolite_id_compartments=args.metabolite_id_compartments,
         save_kegg_map=args.save_kegg_map,
         run_fba=args.run_fba,
         save_html=args.save_html,
@@ -149,6 +153,16 @@ def main() -> None:
         dest="remove_orphan_metabolites",
     )
     build_parser.add_argument("--include-kegg-only", action="store_true")
+    build_parser.add_argument("--use-model-metabolite-ids", action="store_true")
+    build_parser.add_argument(
+        "--metabolite-id-compartments",
+        action=argparse.BooleanOptionalAction,
+        default=None,
+        help=(
+            "Include model compartments in metabolite output where supported. "
+            "Defaults to on for BIGG model IDs and off otherwise."
+        ),
+    )
     build_parser.add_argument("--save-kegg-map", action="store_true")
     build_parser.add_argument("--run-fba", action="store_true")
     build_parser.add_argument("--save-html", action="store_true")

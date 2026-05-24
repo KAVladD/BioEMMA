@@ -294,6 +294,96 @@ def test_build_map_adds_secondary_metabolites_and_valid_segments(monkeypatch, tm
     assert {"nad_c", "nadh_c", "adp_c"} <= {node["bigg_id"] for node in secondary_nodes}
 
 
+def test_build_map_can_use_compartmental_model_metabolite_ids(monkeypatch, tmp_path):
+    cache_root = tmp_path / "cobra-cache"
+    monkeypatch.setenv("BIOEMMA_COBRA_CACHE_DIR", str(cache_root))
+
+    result = build_outputs(
+        model=MODEL,
+        kgml=KGML,
+        database="BIGG",
+        scaling_factor=5,
+        axis_epsilon=10,
+        use_model_metabolite_ids=True,
+        metabolite_id_compartments=True,
+    )
+
+    nodes = result.escher_map[1]["nodes"]
+    primary_nodes = [
+        node
+        for node in nodes.values()
+        if node.get("node_type") == "metabolite" and node.get("node_is_primary")
+    ]
+    secondary_nodes = [
+        node
+        for node in nodes.values()
+        if node.get("node_type") == "metabolite" and not node.get("node_is_primary")
+    ]
+
+    glucose = next(node for node in primary_nodes if node["name"] == "C00031")
+    assert glucose["bigg_id"] == "glc__D_e"
+    assert glucose["compartment"] == "e"
+    assert {"nad_c", "nadh_c", "adp_c"} <= {node["bigg_id"] for node in secondary_nodes}
+    assert all("compartment" in node for node in primary_nodes + secondary_nodes)
+
+
+def test_build_map_can_use_model_metabolite_ids_without_compartments(monkeypatch, tmp_path):
+    cache_root = tmp_path / "cobra-cache"
+    monkeypatch.setenv("BIOEMMA_COBRA_CACHE_DIR", str(cache_root))
+
+    result = build_outputs(
+        model=MODEL,
+        kgml=KGML,
+        database="BIGG",
+        scaling_factor=5,
+        axis_epsilon=10,
+        use_model_metabolite_ids=True,
+        metabolite_id_compartments=False,
+    )
+
+    nodes = result.escher_map[1]["nodes"]
+    secondary_ids = {
+        node["bigg_id"]
+        for node in nodes.values()
+        if node.get("node_type") == "metabolite" and not node.get("node_is_primary")
+    }
+
+    assert {"nad", "nadh", "adp"} <= secondary_ids
+    assert {"nad_c", "nadh_c", "adp_c"}.isdisjoint(secondary_ids)
+    assert all(
+        "compartment" not in node
+        for node in nodes.values()
+        if node.get("node_type") == "metabolite"
+    )
+
+
+def test_seed_model_ids_keep_database_ids_and_store_compartments(monkeypatch, tmp_path):
+    cache_root = tmp_path / "cobra-cache"
+    monkeypatch.setenv("BIOEMMA_COBRA_CACHE_DIR", str(cache_root))
+
+    result = build_outputs(
+        model=MODEL,
+        kgml=KGML,
+        database="SEED",
+        scaling_factor=5,
+        axis_epsilon=10,
+        use_model_metabolite_ids=True,
+        metabolite_id_compartments=True,
+    )
+
+    nodes = result.escher_map[1]["nodes"]
+    secondary_nodes = [
+        node
+        for node in nodes.values()
+        if node.get("node_type") == "metabolite" and not node.get("node_is_primary")
+    ]
+
+    assert "cpd00003" in {node["bigg_id"] for node in secondary_nodes}
+    assert "nad_c" not in {node["bigg_id"] for node in secondary_nodes}
+    assert all(not node["bigg_id"].endswith("_c") for node in secondary_nodes)
+    assert all(node.get("compartment") == "c" for node in secondary_nodes)
+
+
 def test_build_map_canvas_encloses_generated_nodes(monkeypatch, tmp_path):
     cache_root = tmp_path / "cobra-cache"
     monkeypatch.setenv("BIOEMMA_COBRA_CACHE_DIR", str(cache_root))
