@@ -12,21 +12,20 @@ The current main workflow is:
 4. Optionally save a reproducible workflow output directory with the Escher map,
    the reconstructed KEGG map, flux data, summaries, and merged maps.
 
-The project is currently in alpha. The public API may still change while the
-package structure is being prepared for PyPI.
+The project is currently in alpha, and the public API may still change.
 
 ## Installation
 
-For local development:
+Install from PyPI:
+
+```bash
+pip install bioemma
+```
+
+For local development from a source checkout:
 
 ```bash
 pip install -e .
-```
-
-Runtime dependencies can also be installed from:
-
-```bash
-pip install -r requirements.txt
 ```
 
 ## Basic Usage
@@ -253,6 +252,16 @@ cache directory before running tests or CLI commands:
 set BIOEMMA_COBRA_CACHE_DIR=%CD%\.cobra-cache
 ```
 
+By default, the workflow keeps the KEGG reactions and compounds that can be
+matched to the COBRA model. To preserve KEGG-only elements that are not present
+in the model, pass `include_kegg_only=True` in Python or use
+`--include-kegg-only` in the CLI.
+
+To remove metabolite nodes that are not connected to any visible reaction, pass
+`remove_free_metabolites=True` in Python or use `--remove-free-metabolites` in
+the CLI. The older `remove_orphan_metabolites=True` and
+`--remove-orphan-metabolites` names are still supported as aliases.
+
 ## Included Mapping Data
 
 BioEMMA currently bundles two compact runtime mapping files:
@@ -271,16 +280,6 @@ See `NOTICE.md` for third-party data attribution and usage notes.
 BioEMMA's source code is distributed under the MIT License. Bundled mapping
 data are derived from third-party database resources and may be subject to
 their own license terms. See `LICENSE` and `NOTICE.md`.
-
-By default, the workflow keeps the KEGG reactions and compounds that can be
-matched to the COBRA model. To preserve KEGG-only elements that are not present
-in the model, pass `include_kegg_only=True` in Python or use
-`--include-kegg-only` in the CLI.
-
-To remove metabolite nodes that are not connected to any visible reaction, pass
-`remove_free_metabolites=True` in Python or use `--remove-free-metabolites` in
-the CLI. The older `remove_orphan_metabolites=True` and
-`--remove-orphan-metabolites` names are still supported as aliases.
 
 ## Development Notes
 
@@ -312,35 +311,4 @@ set PYTHONPATH=%CD%\src
 set BIOEMMA_COBRA_CACHE_DIR=%CD%\.pytest-cobra-cache
 python -m pytest -q
 ```
-
-## Publishing
-
-Before publishing, bump the version in `pyproject.toml`, run tests, and build
-fresh distribution artifacts:
-
-```cmd
-python -m pip install --upgrade build twine
-rmdir /s /q dist
-python -m build
-python -m twine check dist/*
-```
-
-Upload to TestPyPI first:
-
-```cmd
-python -m twine upload --repository testpypi dist/*
-```
-
-Install from TestPyPI in a clean environment and smoke-test the CLI. Then upload
-the same checked artifacts to PyPI:
-
-```cmd
-python -m twine upload dist/*
-```
-
-## Status
-
-BioEMMA is not yet a stable release. Before publishing to PyPI, the package
-still needs a final check of bundled data, license compatibility, and user-facing
-visualization dependencies.
 
