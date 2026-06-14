@@ -213,3 +213,6 @@ playground/
 .cobra_cache
 .pytest-cobra-cache
 .release-smoke
+.codex_tmp/
+keggdb.dat
+metanetx_fresh_check_*/

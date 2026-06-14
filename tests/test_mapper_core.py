@@ -294,6 +294,33 @@ def test_build_map_adds_secondary_metabolites_and_valid_segments(monkeypatch, tm
     assert {"nad_c", "nadh_c", "adp_c"} <= {node["bigg_id"] for node in secondary_nodes}
 
 
+def test_secondary_metabolites_can_use_selected_database_ids(monkeypatch, tmp_path):
+    cache_root = tmp_path / "cobra-cache"
+    monkeypatch.setenv("BIOEMMA_COBRA_CACHE_DIR", str(cache_root))
+
+    result = build_outputs(
+        model=MODEL,
+        kgml=KGML,
+        database="SEED",
+        scaling_factor=5,
+        axis_epsilon=10,
+        use_database_secondary_metabolite_ids=True,
+    )
+
+    nodes = result.escher_map[1]["nodes"]
+    secondary_ids = {
+        node["bigg_id"]
+        for node in nodes.values()
+        if node.get("node_type") == "metabolite" and not node.get("node_is_primary")
+    }
+
+    assert "cpd00003" in secondary_ids
+    assert "nad_c" not in secondary_ids
+    assert result.summary["metabolite_id_options"][
+        "use_database_secondary_metabolite_ids"
+    ]
+
+
 def test_build_map_can_use_compartmental_model_metabolite_ids(monkeypatch, tmp_path):
     cache_root = tmp_path / "cobra-cache"
     monkeypatch.setenv("BIOEMMA_COBRA_CACHE_DIR", str(cache_root))

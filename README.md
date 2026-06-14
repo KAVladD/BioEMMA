@@ -121,6 +121,26 @@ database identifier itself valid and stores the model compartment separately in
 the optional `compartment` field, because those identifiers do not natively
 encode model compartments in the bundled mappings.
 
+If you do not need flux overlays keyed by model metabolite IDs, secondary
+metabolites can instead use the selected database namespace while primary
+metabolites keep the same default database IDs:
+
+```python
+result = build_outputs(
+    model="path/to/model.xml",
+    pathway="rn00010",
+    output_dir="out",
+    database="SEED",
+    use_database_secondary_metabolite_ids=True,
+)
+```
+
+BioEMMA first checks model annotations for the selected database, then falls
+back through the bundled MetaNetX mappings, and finally falls back to the COBRA
+model ID if no database identifier is available. If both
+`use_model_metabolite_ids` and `use_database_secondary_metabolite_ids` are set,
+the model-ID mode takes priority.
+
 Visualization layout settings can be tuned with `VisualizationOptions`:
 
 ```python
@@ -222,6 +242,9 @@ To use COBRA model metabolite IDs from the CLI, add
 `--use-model-metabolite-ids`. Use `--metabolite-id-compartments` or
 `--no-metabolite-id-compartments` to control whether model compartments are
 included where the selected database representation supports them.
+
+To keep primary IDs database-based and also convert secondary metabolite IDs to
+the selected database, add `--use-database-secondary-metabolite-ids`.
 
 If cobrapy cannot access its default cache directory on Windows, set a local
 cache directory before running tests or CLI commands:

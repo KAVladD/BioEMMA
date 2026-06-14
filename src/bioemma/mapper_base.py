@@ -24,6 +24,7 @@ class EscherMapper:
                  secondary_metabolite_distance: float | None = None,
                  secondary_metabolite_spacing: float | None = None,
                  use_model_metabolite_ids: bool = False,
+                 use_database_secondary_metabolite_ids: bool = False,
                  metabolite_id_compartments: bool | None = None,
                  canvas_width: float = 1000,
                  canvas_height: float = 1000,
@@ -70,6 +71,9 @@ class EscherMapper:
         )
         self.DB = database # SEED or BIGG
         self.use_model_metabolite_ids = use_model_metabolite_ids
+        self.use_database_secondary_metabolite_ids = (
+            use_database_secondary_metabolite_ids
+        )
         self.metabolite_id_compartments = (
             self.DB == "BIGG"
             if metabolite_id_compartments is None
@@ -1050,6 +1054,73 @@ class EscherMapper:
             )
         return met.id
 
+    def _database_metabolite_output_id(self, met):
+        direct_id = self._database_annotation_value(met)
+        if direct_id:
+            return direct_id
+
+        mapped_id = self._mapped_model_metabolite_database_id(met)
+        if mapped_id:
+            return mapped_id
+
+        return (
+            self._strip_model_compartment(met.id, self._model_metabolite_compartment(met))
+            or met.id
+        )
+
+    def _database_annotation_value(self, met):
+        key_by_db = {
+            "BIGG": "bigg.metabolite",
+            "SEED": "seed.compound",
+            "KEGG": "kegg.compound",
+        }
+        key = key_by_db.get(self.DB)
+        if key is None:
+            return None
+        return self._select_annotation_value(met, key)
+
+    def _mapped_model_metabolite_database_id(self, met):
+        if self.DB not in {"BIGG", "SEED", "KEGG"}:
+            return None
+
+        kegg_ids = self._annotation_values(met.annotation, "kegg.compound")
+        for kegg_id in kegg_ids:
+            mapped_id = self._mapped_kegg_metabolite_database_id(kegg_id)
+            if mapped_id:
+                return mapped_id
+
+        source_ids = {
+            "bigg": self._annotation_values(met.annotation, "bigg.metabolite"),
+            "seed": self._annotation_values(met.annotation, "seed.compound"),
+        }
+        source_ids["bigg"].append(
+            self._strip_model_compartment(met.id, self._model_metabolite_compartment(met))
+        )
+
+        for source_db, values in source_ids.items():
+            for value in values:
+                if not value:
+                    continue
+                for entry in self.m_mapper.reverse_lookup(source_db, value):
+                    mapped_id = self._mapped_kegg_metabolite_database_id(entry.kegg)
+                    if mapped_id:
+                        return mapped_id
+
+        return None
+
+    def _mapped_kegg_metabolite_database_id(self, kegg_id):
+        if self.DB == "KEGG":
+            return kegg_id
+
+        mapped = self.m_mapper.get(kegg_id)
+        if not mapped:
+            return None
+        if self.DB == "BIGG":
+            return mapped.bigg
+        if self.DB == "SEED":
+            return mapped.seed
+        return None
+
     def _select_annotation_value(self, met, key, m_name=None):
         values = self._annotation_values(met.annotation, key)
         if not values:
@@ -1138,15 +1209,16 @@ class EscherMapper:
                     continue
 
                 entry = {
-                    "bigg_id": self._model_metabolite_output_id(met)
-                    if self.use_model_metabolite_ids
-                    else met.id,
+                    "bigg_id": self._secondary_metabolite_output_id(met),
                     "name": met.name,
                     "coefficient": coef,
                 }
                 compartment = self._model_metabolite_compartment(met)
                 if (
-                    self.use_model_metabolite_ids
+                    (
+                        self.use_model_metabolite_ids
+                        or self.use_database_secondary_metabolite_ids
+                    )
                     and self.metabolite_id_compartments
                     and compartment
                 ):
@@ -1164,6 +1236,13 @@ class EscherMapper:
                 }
 
         return secondary
+
+    def _secondary_metabolite_output_id(self, met):
+        if self.use_model_metabolite_ids:
+            return self._model_metabolite_output_id(met)
+        if self.use_database_secondary_metabolite_ids:
+            return self._database_metabolite_output_id(met)
+        return met.id
     
     def _add_secondary_metabolites(self, secondary_data, all_nodes, r_desc, global_idxs):
 

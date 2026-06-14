@@ -2,13 +2,13 @@
 ============================================================
   METABOLITES (chem_xref)
 ============================================================
-  Total rows (KEGG entries): 18323
-  Unique KEGG IDs: 18323
-  Unique MNX IDs: 18166
-  Coverage bigg: 1769/18323 (9.7%)
-  Coverage seed: 15311/18323 (83.6%)
-  Coverage metacyc: 7355/18323 (40.1%)
-  Ambiguous: 1077/18323 (5.9%)
+  Total rows (KEGG entries): 19373
+  Unique KEGG IDs: 19373
+  Unique MNX IDs: 19209
+  Coverage bigg: 1862/19373 (9.6%)
+  Coverage seed: 16336/19373 (84.3%)
+  Coverage metacyc: 7737/19373 (39.9%)
+  Ambiguous: 1155/19373 (6.0%)
 
   Ambiguity examples:
     KEGG=C00341 MNX=MNXM100 bigg=grdp [seed(2)]

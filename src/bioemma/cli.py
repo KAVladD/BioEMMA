@@ -68,6 +68,9 @@ def build(args) -> None:
             remove_orphan_metabolites=args.remove_orphan_metabolites,
             include_kegg_only=args.include_kegg_only,
             use_model_metabolite_ids=args.use_model_metabolite_ids,
+            use_database_secondary_metabolite_ids=(
+                args.use_database_secondary_metabolite_ids
+            ),
             metabolite_id_compartments=args.metabolite_id_compartments,
             save_kegg_map=args.save_kegg_map,
             run_fba=args.run_fba,
@@ -105,6 +108,9 @@ def build(args) -> None:
         remove_orphan_metabolites=args.remove_orphan_metabolites,
         include_kegg_only=args.include_kegg_only,
         use_model_metabolite_ids=args.use_model_metabolite_ids,
+        use_database_secondary_metabolite_ids=(
+            args.use_database_secondary_metabolite_ids
+        ),
         metabolite_id_compartments=args.metabolite_id_compartments,
         save_kegg_map=args.save_kegg_map,
         run_fba=args.run_fba,
@@ -154,6 +160,15 @@ def main() -> None:
     )
     build_parser.add_argument("--include-kegg-only", action="store_true")
     build_parser.add_argument("--use-model-metabolite-ids", action="store_true")
+    build_parser.add_argument(
+        "--use-database-secondary-metabolite-ids",
+        action="store_true",
+        help=(
+            "Use identifiers from the selected database for secondary metabolites "
+            "instead of raw COBRA model metabolite IDs. Ignored when "
+            "--use-model-metabolite-ids is set."
+        ),
+    )
     build_parser.add_argument(
         "--metabolite-id-compartments",
         action=argparse.BooleanOptionalAction,

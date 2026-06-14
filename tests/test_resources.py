@@ -18,6 +18,15 @@ def test_bundled_metabolite_mapping_can_be_loaded():
     assert mapper["C00002"].bigg
 
 
+def test_bundled_metabolite_mapping_includes_generic_isocitrate():
+    mapper = MetaNetXMapper(resource_path("metabolite_mapping.tsv"))
+
+    isocitrate = mapper["C00311"]
+    assert isocitrate.mnx == "MNXM89661"
+    assert isocitrate.bigg == "icit"
+    assert isocitrate.seed == "cpd00260"
+
+
 def test_bundled_reaction_mapping_can_be_loaded():
     mapper = MetaNetXMapper(resource_path("reaction_mapping.tsv"))
 
