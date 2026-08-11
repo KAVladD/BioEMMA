@@ -216,3 +216,7 @@ playground/
 .codex_tmp/
 keggdb.dat
 metanetx_fresh_check_*/
+tmp*
+temp*
+.tmp*
+.temp*

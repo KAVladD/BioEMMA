@@ -73,6 +73,7 @@ def build(args) -> None:
             ),
             metabolite_id_compartments=args.metabolite_id_compartments,
             compartment=args.compartment,
+            use_fallback_matching=args.fallback_matching,
             save_kegg_map=args.save_kegg_map,
             run_fba=args.run_fba,
             save_html=args.save_html,
@@ -114,6 +115,7 @@ def build(args) -> None:
         ),
         metabolite_id_compartments=args.metabolite_id_compartments,
         compartment=args.compartment,
+        use_fallback_matching=args.fallback_matching,
         save_kegg_map=args.save_kegg_map,
         run_fba=args.run_fba,
         save_html=args.save_html,
@@ -186,6 +188,16 @@ def main() -> None:
         help=(
             "Keep only model-matched reactions whose COBRA reaction uses this "
             "compartment ID, for example 'm' for mitochondrion."
+        ),
+    )
+    build_parser.add_argument(
+        "--fallback-matching",
+        action=argparse.BooleanOptionalAction,
+        default=True,
+        help=(
+            "Use fallback reaction matching through EC-derived BiGG, MetaCyc, "
+            "Rhea, and EC annotations. Use --no-fallback-matching to keep "
+            "strict KEGG/BiGG/SEED matches only."
         ),
     )
     build_parser.add_argument("--save-kegg-map", action="store_true")

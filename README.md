@@ -85,8 +85,9 @@ For a model-derived map, BioEMMA keeps the KEGG reaction ID in the reaction
 
 - if the KEGG reaction matched the COBRA model through a BiGG reaction
   annotation, use the matched model BiGG ID;
-- if the reaction matched through KEGG, SEED, MetaCyc, Rhea, or EC only, keep
-  the default BiGG alias resolved from the bundled mapping table;
+- if the reaction matched through KEGG, SEED, MetaCyc, Rhea, EC-derived BiGG,
+  or EC only, keep the default BiGG alias resolved from the bundled mapping
+  table;
 - for pure KEGG maps saved with `save_kegg_map=True`, use the default mapped
   alias because there is no model reaction match to prefer.
 
@@ -95,6 +96,41 @@ This avoids cases where a KEGG reaction such as `R01518` matches model reaction
 `PGAM_h`. Flux data are still stored with their original model reaction IDs in
 `fluxes.json`; future workflow code may add an explicit flux remapping summary
 for Escher overlays.
+
+### Reaction matching fallback
+
+By default, BioEMMA enables fallback reaction matching
+(`use_fallback_matching=True`). The matcher first prefers direct identifiers
+and only then uses broader fallback identifiers:
+
+1. direct BiGG cross-reference;
+2. direct KEGG reaction annotation;
+3. direct SEED cross-reference;
+4. MetaCyc or Rhea cross-reference;
+5. BiGG cross-reference inferred during mapping-table preparation by EC number
+   and metabolite-participant overlap;
+6. direct EC-number match.
+
+To build a strict baseline with only KEGG/BiGG/SEED matches, disable fallback:
+
+```python
+result = build_outputs(
+    model="path/to/model.xml",
+    pathway="rn00020",
+    output_dir="out",
+    use_fallback_matching=False,
+)
+```
+
+The same option is available in the CLI:
+
+```bash
+bioemma build --model path/to/model.xml --pathway rn00020 --output-dir out --no-fallback-matching
+```
+
+The selected mode and per-method reaction match counts are written to
+`summary.json` under `reaction_matching_options` and
+`map_stats.model_matching.reaction_match_methods`.
 
 ### Model metabolite IDs
 
@@ -298,9 +334,14 @@ BioEMMA currently bundles two compact runtime mapping files:
 - `metabolite_mapping.tsv`
 - `reaction_mapping.tsv`
 
-These files are derived from MetaNetX cross-reference tables and are used to
-map KEGG identifiers to BiGG and SEED identifiers. The large raw MetaNetX
-download cache is not intended to be included in the Python package.
+These files are derived from MetaNetX cross-reference and reaction-property
+tables and are used to map KEGG identifiers to BiGG, SEED, MetaCyc, Rhea, and
+EC identifiers. For reactions without direct BiGG mapping, the preparation
+script can add an EC-based fallback BiGG mapping when candidate reactions share
+the same EC number and at least 50% of the source KEGG reaction participants;
+only candidates with the best overlap for that KEGG reaction are retained. The
+large raw MetaNetX download cache is not intended to be included in the Python
+package.
 
 See `NOTICE.md` for third-party data attribution and usage notes.
 

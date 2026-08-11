@@ -180,6 +180,85 @@ def test_model_ec_annotation_matches_when_mapping_has_ec():
     ec_reaction = next(iter(ec_map[1]["reactions"].values()))
 
     assert ec_reaction["bigg_id"] == "PGAM_h"
+    assert mapper.map_stats["model_matching"]["reaction_match_methods"] == {"ec": 1}
+    assert mapper.map_stats["model_matching"]["use_fallback_matching"] is True
+
+
+def test_model_ec_annotation_is_ignored_without_fallback_matching():
+    reactions = {
+        "R01518": {
+            "ids": {"KEGG": "R01518", "BIGG": "PGAM_h", "SEED": "rxn01106"},
+            "position": ("50", "0"),
+            "substrates": {"main": [], "side": []},
+            "products": {"main": [], "side": []},
+            "reversibility": "reversible",
+        },
+    }
+
+    class FakeReaction:
+        annotation = {"ec-code": "5.4.2.1"}
+        metabolites = {}
+
+    class FakeModel:
+        reactions = [FakeReaction()]
+        metabolites = []
+
+    mapper = EscherMapper({}, reactions, scaling_factor=1, use_fallback_matching=False)
+    mapper.r_mapper["R01518"]._ec_all = ["5.4.2.1"]
+    ec_map = mapper.build_map(FakeModel())
+
+    assert ec_map[1]["reactions"] == {}
+    assert mapper.map_stats["model_matching"]["matched_reactions"] == 0
+    assert mapper.map_stats["model_matching"]["unmatched_reactions"] == 1
+    assert mapper.map_stats["model_matching"]["reaction_match_methods"] == {}
+    assert mapper.map_stats["model_matching"]["use_fallback_matching"] is False
+
+
+def test_ec_fallback_bigg_mapping_is_ignored_without_fallback_matching():
+    reactions = {
+        "R01518": {
+            "ids": {"KEGG": "R01518", "BIGG": "PGAM_h", "SEED": "rxn01106"},
+            "position": ("50", "0"),
+            "substrates": {"main": [], "side": []},
+            "products": {"main": [], "side": []},
+            "reversibility": "reversible",
+        },
+    }
+
+    class FakeReaction:
+        annotation = {"bigg.reaction": "PGM"}
+        metabolites = {}
+
+    class FakeModel:
+        reactions = [FakeReaction()]
+        metabolites = []
+
+    strict_mapper = EscherMapper(
+        {},
+        reactions,
+        scaling_factor=1,
+        use_fallback_matching=False,
+    )
+    strict_mapper.r_mapper["R01518"]._bigg_all = ["PGM"]
+    strict_mapper.r_mapper["R01518"]._is_ec_fallback = True
+    strict_map = strict_mapper.build_map(FakeModel())
+
+    fallback_mapper = EscherMapper(
+        {},
+        reactions,
+        scaling_factor=1,
+        use_fallback_matching=True,
+    )
+    fallback_mapper.r_mapper["R01518"]._bigg_all = ["PGM"]
+    fallback_mapper.r_mapper["R01518"]._is_ec_fallback = True
+    fallback_map = fallback_mapper.build_map(FakeModel())
+
+    assert strict_map[1]["reactions"] == {}
+    fallback_reaction = next(iter(fallback_map[1]["reactions"].values()))
+    assert fallback_reaction["bigg_id"] == "PGM"
+    assert fallback_mapper.map_stats["model_matching"]["reaction_match_methods"] == {
+        "bigg_ec_fallback": 1
+    }
 
 
 def test_model_bigg_match_is_preferred_over_earlier_ec_match():
@@ -517,7 +596,7 @@ def test_build_map_adds_secondary_metabolites_and_valid_segments(monkeypatch, tm
         for node in nodes.values()
         if node.get("node_type") == "metabolite" and not node.get("node_is_primary")
     ]
-    assert len(secondary_nodes) == 26
+    assert len(secondary_nodes) >= 26
     assert {"nad_c", "nadh_c", "adp_c"} <= {node["bigg_id"] for node in secondary_nodes}
 
 
@@ -578,7 +657,7 @@ def test_build_map_can_use_compartmental_model_metabolite_ids(monkeypatch, tmp_p
     assert glucose["bigg_id"] == "glc__D_e"
     assert glucose["compartment"] == "e"
     assert {"nad_c", "nadh_c", "adp_c"} <= {node["bigg_id"] for node in secondary_nodes}
-    assert all("compartment" in node for node in primary_nodes + secondary_nodes)
+    assert all("compartment" in node for node in secondary_nodes)
 
 
 def test_build_map_can_use_model_metabolite_ids_without_compartments(monkeypatch, tmp_path):

@@ -15,6 +15,7 @@ EC-fallback: если для KEGG reaction нет прямого BiGG маппи
 
 import csv
 import os
+import re
 import sys
 import urllib.request
 from collections import defaultdict
@@ -28,10 +29,14 @@ METANETX_BASE = "https://www.metanetx.org/cgi-bin/mnxget/mnxref"
 FILES = {
     "chem_xref": f"{METANETX_BASE}/chem_xref.tsv",
     "reac_xref": f"{METANETX_BASE}/reac_xref.tsv",
+    "reac_prop": f"{METANETX_BASE}/reac_prop.tsv",
 }
 
-DATA_DIR = "metanetx_data"
-OUTPUT_DIR = "resources"
+DATA_DIR = os.environ.get("BIOEMMA_METANETX_DATA_DIR", "metanetx_data")
+OUTPUT_DIR = os.environ.get("BIOEMMA_MAPPING_OUTPUT_DIR", "resources")
+EC_FALLBACK_MIN_PARTICIPANT_OVERLAP = 0.5
+
+REACTION_PARTICIPANT_RE = re.compile(r"([A-Za-z0-9_.-]+)@MNXD[0-9A-Za-z_]+")
 
 CHEM_NAMESPACES = {
     "kegg.compound": "kegg",
@@ -202,11 +207,99 @@ def add_descriptions(rows, mnx_mapping, xref_filepath, primary_ns_prefix):
     return rows
 
 
+def parse_reaction_participants(equation):
+    return sorted(set(REACTION_PARTICIPANT_RE.findall(equation)))
+
+
+def parse_reaction_props(filepath):
+    """Return reaction EC numbers and participant sets from MetaNetX reac_prop.tsv."""
+    mnx_to_props = defaultdict(lambda: {"ec": [], "participants": []})
+    parsed = 0
+
+    print(f"\n  Parsing reaction properties from {filepath}...")
+
+    with open(filepath, "r", encoding="utf-8") as f:
+        for line in f:
+            line = line.strip()
+            if line.startswith("#") or not line:
+                continue
+
+            parts = line.split("\t")
+            if len(parts) < 4:
+                continue
+
+            mnx_id = parts[0]
+            participants = parse_reaction_participants(parts[1])
+            if participants:
+                mnx_to_props[mnx_id]["participants"] = participants
+
+            ec_field = parts[3].strip()
+            if not ec_field:
+                continue
+
+            for ec in ec_field.replace("|", ";").split(";"):
+                ec = ec.strip()
+                if ec and ec not in mnx_to_props[mnx_id]["ec"]:
+                    mnx_to_props[mnx_id]["ec"].append(ec)
+                    parsed += 1
+
+    ec_reactions = sum(1 for props in mnx_to_props.values() if props["ec"])
+    participant_reactions = sum(
+        1 for props in mnx_to_props.values() if props["participants"]
+    )
+    print(f"  MNX reactions with participants: {participant_reactions}")
+    print(f"  MNX reactions with EC: {ec_reactions}")
+    print(f"  EC assignments: {parsed}")
+    return dict(mnx_to_props)
+
+
+def add_reaction_props_from_props(reac_mapping, reac_prop_filepath):
+    """Merge EC numbers and participants from reac_prop.tsv into reaction xrefs."""
+    mnx_to_props = parse_reaction_props(reac_prop_filepath)
+    enriched_mnx = 0
+    enriched_ec = 0
+    enriched_participants = 0
+
+    for mnx_id, props in mnx_to_props.items():
+        if mnx_id not in reac_mapping:
+            continue
+
+        participants = props.get("participants", [])
+        if participants:
+            reac_mapping[mnx_id]["participants"] = participants
+            enriched_participants += 1
+
+        ecs = props.get("ec", [])
+        existing = set(reac_mapping[mnx_id].get("ec", []))
+        new_ecs = [ec for ec in ecs if ec not in existing]
+        if not new_ecs:
+            continue
+
+        reac_mapping[mnx_id]["ec"].extend(new_ecs)
+        enriched_mnx += 1
+        enriched_ec += len(new_ecs)
+
+    print(f"  Reaction MNX entries enriched with EC: {enriched_mnx}")
+    print(f"  EC values added to xref mapping: {enriched_ec}")
+    print(f"  Reaction MNX entries enriched with participants: {enriched_participants}")
+    return reac_mapping
+
+
 # ============================================================
 # EC-based fallback (offline, из reac_xref.tsv)
 # ============================================================
 
-def build_ec_fallback_offline(mnx_mapping, reac_rows):
+def participant_overlap(source_participants, candidate_participants):
+    if not source_participants or not candidate_participants:
+        return 0.0
+    return len(source_participants & candidate_participants) / len(source_participants)
+
+
+def build_ec_fallback_offline(
+    mnx_mapping,
+    reac_rows,
+    min_participant_overlap=EC_FALLBACK_MIN_PARTICIPANT_OVERLAP,
+):
     """
     Для реакций без BiGG: ищет BiGG через общий EC номер.
     
@@ -229,12 +322,13 @@ def build_ec_fallback_offline(mnx_mapping, reac_rows):
     # - Для каждого MNX собираем все kegg и все ec
     # - Если MNX имеет и kegg и ec — связываем
     kegg_to_ec = defaultdict(set)
-    ec_to_bigg = defaultdict(set)
+    ec_to_bigg = defaultdict(list)
 
     for mnx_id, ns_ids in mnx_mapping.items():
         keggs = ns_ids.get("kegg", [])
         ecs = ns_ids.get("ec", [])
         biggs = ns_ids.get("bigg", [])
+        participants = set(ns_ids.get("participants", []))
 
         # kegg -> ec (через общий MNX)
         for k in keggs:
@@ -244,10 +338,20 @@ def build_ec_fallback_offline(mnx_mapping, reac_rows):
         # ec -> bigg (через общий MNX)
         for ec in ecs:
             for b in biggs:
-                ec_to_bigg[ec].add(b)
+                ec_to_bigg[ec].append(
+                    {
+                        "bigg": b,
+                        "mnx_id": mnx_id,
+                        "participants": participants,
+                    }
+                )
 
     print(f"  KEGG->EC index: {len(kegg_to_ec)} KEGG reactions with EC")
     print(f"  EC->BiGG index: {len(ec_to_bigg)} EC numbers with BiGG")
+    print(
+        "  EC fallback participant overlap threshold: "
+        f"{min_participant_overlap:.0%}"
+    )
 
     # Обогащаем ВСЕ строки EC (даже если уже есть bigg)
     ec_enriched = 0
@@ -267,6 +371,9 @@ def build_ec_fallback_offline(mnx_mapping, reac_rows):
 
     # Фоллбэк BiGG
     fallback_count = 0
+    rejected_by_participants = 0
+    discarded_by_best_overlap = 0
+    missing_participants = 0
     for row in reac_rows:
         if row.get("bigg", ""):
             continue
@@ -275,21 +382,63 @@ def build_ec_fallback_offline(mnx_mapping, reac_rows):
         if not ec_str:
             continue
 
-        ecs = [e.strip() for e in ec_str.split("|") if e.strip()]
-        fallback_bigg = set()
-        for ec in ecs:
-            fallback_bigg.update(ec_to_bigg.get(ec, set()))
+        source_participants = set(
+            mnx_mapping.get(row.get("mnx_id", ""), {}).get("participants", [])
+        )
+        if not source_participants:
+            missing_participants += 1
+            continue
 
-        if fallback_bigg:
-            row["bigg"] = "|".join(sorted(fallback_bigg))
+        ecs = [e.strip() for e in ec_str.split("|") if e.strip()]
+        fallback_scores = {}
+        for ec in ecs:
+            for candidate in ec_to_bigg.get(ec, []):
+                overlap = participant_overlap(
+                    source_participants,
+                    candidate["participants"],
+                )
+                if overlap < min_participant_overlap:
+                    rejected_by_participants += 1
+                    continue
+
+                bigg_id = candidate["bigg"]
+                fallback_scores[bigg_id] = max(
+                    fallback_scores.get(bigg_id, 0.0),
+                    overlap,
+                )
+
+        if fallback_scores:
+            best_overlap = max(fallback_scores.values())
+            fallback_bigg = sorted(
+                bigg_id
+                for bigg_id, score in fallback_scores.items()
+                if score == best_overlap
+            )
+            discarded_by_best_overlap += len(fallback_scores) - len(fallback_bigg)
+            row["bigg"] = "|".join(fallback_bigg)
             amb = row.get("ambiguous", "")
-            ec_note = "ec_fallback"
+            ec_note = f"ec_fallback(participants>={min_participant_overlap:.2f}"
             if len(fallback_bigg) > 1:
-                ec_note += f"(bigg:{len(fallback_bigg)})"
+                ec_note += f",bigg:{len(fallback_bigg)}"
+            ec_note += ")"
             row["ambiguous"] = f"{amb},{ec_note}" if amb else ec_note
             fallback_count += 1
 
     print(f"  EC fallback: {fallback_count} reactions got BiGG via EC")
+    print(
+        "  EC fallback candidates rejected by participant overlap: "
+        f"{rejected_by_participants}"
+    )
+    if discarded_by_best_overlap:
+        print(
+            "  EC fallback lower-overlap BiGG IDs discarded: "
+            f"{discarded_by_best_overlap}"
+        )
+    if missing_participants:
+        print(
+            "  EC fallback rows skipped without participant data: "
+            f"{missing_participants}"
+        )
     return reac_rows
 
 
@@ -371,6 +520,7 @@ def main():
     print("\n[2/4] Parsing cross-reference files...")
     chem_mapping = parse_xref(paths["chem_xref"], CHEM_NAMESPACES)
     reac_mapping = parse_xref(paths["reac_xref"], REAC_NAMESPACES)
+    reac_mapping = add_reaction_props_from_props(reac_mapping, paths["reac_prop"])
 
     # 3. Build tables
     print("\n[3/4] Building mapping tables...")
@@ -414,7 +564,7 @@ def main():
     # Stats
     stats = []
     stats.append(compute_stats(chem_rows, "METABOLITES (chem_xref)", target_ns))
-    stats.append(compute_stats(reac_rows, "REACTIONS (reac_xref)", reac_target))
+    stats.append(compute_stats(reac_rows, "REACTIONS (reac_xref + reac_prop)", reac_target))
 
     stats_text = "\n".join(stats)
     print(stats_text)

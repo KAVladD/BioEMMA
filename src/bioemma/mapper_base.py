@@ -27,6 +27,7 @@ class EscherMapper:
                  use_database_secondary_metabolite_ids: bool = False,
                  metabolite_id_compartments: bool | None = None,
                  compartment_filter: str | None = None,
+                 use_fallback_matching: bool = True,
                  canvas_width: float = 1000,
                  canvas_height: float = 1000,
                  axis_epsilon: float = 2,):
@@ -83,6 +84,7 @@ class EscherMapper:
         self.compartment_filter = self._normalize_compartment_filter(
             compartment_filter
         )
+        self.use_fallback_matching = bool(use_fallback_matching)
 
         self.segments_counter = 0
 
@@ -92,6 +94,7 @@ class EscherMapper:
         self.m_id_to_kegg_name = {}
         self.metabolite_id2node = {}
         self.reactions_idx2kegg = {}
+        self._model_reaction_match_methods = {}
 
         self.nodes = {}
         self.text_labels = {}
@@ -239,6 +242,10 @@ class EscherMapper:
             "matched_reactions": len(cobra_model_reactions),
             "unmatched_reactions": len(anti_reactions),
             "compartment_filter": self.compartment_filter,
+            "use_fallback_matching": self.use_fallback_matching,
+            "reaction_match_methods": self._count_values(
+                self._model_reaction_match_methods.values()
+            ),
         }
         if not self.include_kegg_only:
             all_nodes, r2indx_dict = self._subtract_not_in_model_reactions(
@@ -425,6 +432,12 @@ class EscherMapper:
                 "delta": diff,
             }
         return delta
+
+    def _count_values(self, values):
+        counts = {}
+        for value in values:
+            counts[value] = counts.get(value, 0) + 1
+        return dict(sorted(counts.items()))
     
     def _prepare_elements_descriptions(self, elements, generation_func):
 
@@ -469,7 +482,7 @@ class EscherMapper:
     def _generate_reaction_dict(self, ids, reaction, name=None):
 
         if self.DB == "BIGG":
-            id = ids["BIGG"]
+            id = self._reaction_bigg_output_id(ids)
         elif self.DB == "SEED":
             id = str(ids["SEED"]) + "_c0"
         elif self.DB == "KEGG":
@@ -505,6 +518,13 @@ class EscherMapper:
                                              for m in reaction["products"].get("main", [])])
 
         return reaction_dict
+
+    def _reaction_bigg_output_id(self, ids):
+        if not self.use_fallback_matching:
+            mapping_entry = self.r_mapper.get(ids.get("KEGG"))
+            if mapping_entry and mapping_entry.is_ec_fallback:
+                return ""
+        return ids.get("BIGG") or ""
     
     def _generate_node_dict(self, type, pos):
 
@@ -879,6 +899,7 @@ class EscherMapper:
         matched = {}
         model_reaction_bigg_ids = {}
         anti_reactions = []
+        self._model_reaction_match_methods = {}
 
         for r_name in r_nodes.keys():
 
@@ -886,13 +907,29 @@ class EscherMapper:
             mapping_entry = self.r_mapper.get(r_name)
             biggs = set(mapping_entry.bigg_all) if mapping_entry else set()
             seeds = set(mapping_entry.seed_all) if mapping_entry else set()
-            metacycs = set(mapping_entry.metacyc_all) if mapping_entry else set()
-            rheas = set(mapping_entry.rhea_all) if mapping_entry else set()
-            ecs = set(mapping_entry.ec_all) if mapping_entry else set()
+            fallback_bigg = bool(mapping_entry and mapping_entry.is_ec_fallback)
+            if fallback_bigg and not self.use_fallback_matching:
+                biggs = set()
+            metacycs = (
+                set(mapping_entry.metacyc_all)
+                if mapping_entry and self.use_fallback_matching
+                else set()
+            )
+            rheas = (
+                set(mapping_entry.rhea_all)
+                if mapping_entry and self.use_fallback_matching
+                else set()
+            )
+            ecs = (
+                set(mapping_entry.ec_all)
+                if mapping_entry and self.use_fallback_matching
+                else set()
+            )
 
             best_match = None
             best_score = -1
             best_bigg_id = None
+            best_method = None
             for rxn in model.reactions:
                 if not self._reaction_matches_compartment_filter(rxn):
                     continue
@@ -914,30 +951,47 @@ class EscherMapper:
                 score = 0
                 candidate_bigg_id = None
 
-                if bigg_matches:
+                if bigg_matches and not fallback_bigg:
                     score = 100
+                    method = "bigg"
                     candidate_bigg_id = self._select_model_reaction_bigg_id(
                         rxn_bigg,
                         bigg_matches,
                     )
                 elif keggs & set(rxn_kegg):
                     score = 90
+                    method = "kegg"
                 elif seeds & set(rxn_seed):
                     score = 80
+                    method = "seed"
                 elif metacycs & set(rxn_metacyc):
                     score = 70
+                    method = "metacyc"
                 elif rheas & set(rxn_rhea):
                     score = 70
+                    method = "rhea"
+                elif bigg_matches and fallback_bigg:
+                    score = 60
+                    method = "bigg_ec_fallback"
+                    candidate_bigg_id = self._select_model_reaction_bigg_id(
+                        rxn_bigg,
+                        bigg_matches,
+                    )
                 elif ecs & set(rxn_ec):
                     score = 10
+                    method = "ec"
+                else:
+                    method = None
 
                 if score and score > best_score:
                     best_match = rxn
                     best_score = score
                     best_bigg_id = candidate_bigg_id
+                    best_method = method
 
             if best_match:
                 matched[r_name] = best_match
+                self._model_reaction_match_methods[r_name] = best_method
                 if best_bigg_id:
                     model_reaction_bigg_ids[r_name] = best_bigg_id
             else:
