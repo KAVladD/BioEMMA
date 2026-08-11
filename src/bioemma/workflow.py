@@ -188,6 +188,7 @@ def build_escher_map(
     use_model_metabolite_ids: bool = False,
     use_database_secondary_metabolite_ids: bool = False,
     metabolite_id_compartments: bool | None = None,
+    compartment: str | None = None,
 ) -> tuple[list[dict[str, Any]], dict[str, Any]]:
     options = _resolve_visualization_options(
         visualization_options,
@@ -219,6 +220,7 @@ def build_escher_map(
         use_model_metabolite_ids=use_model_metabolite_ids,
         use_database_secondary_metabolite_ids=use_database_secondary_metabolite_ids,
         metabolite_id_compartments=metabolite_id_compartments,
+        compartment_filter=compartment,
     )
     escher_map = mapper.build_map(cobra_model)
     kegg_reconstruction["map_stats"] = mapper.map_stats
@@ -331,6 +333,7 @@ def build_outputs(
     use_model_metabolite_ids: bool = False,
     use_database_secondary_metabolite_ids: bool = False,
     metabolite_id_compartments: bool | None = None,
+    compartment: str | None = None,
     save_kegg_map: bool = False,
     save_html: bool = False,
 ) -> BioEmmaResult:
@@ -364,6 +367,7 @@ def build_outputs(
         use_model_metabolite_ids=use_model_metabolite_ids,
         use_database_secondary_metabolite_ids=use_database_secondary_metabolite_ids,
         metabolite_id_compartments=metabolite_id_compartments,
+        compartment_filter=compartment,
     )
     escher_map = mapper.build_map(cobra_model)
     kegg_escher_map = None
@@ -385,6 +389,7 @@ def build_outputs(
         "identifier_coverage": compute_identifier_coverage(kegg_reconstruction),
         "escher": validate_escher_map(escher_map),
         "map_stats": mapper.map_stats,
+        "compartment_filter": mapper.compartment_filter,
         "has_fluxes": coerced_fluxes is not None,
         "visualization_options": _visualization_options_summary(options),
         "metabolite_id_options": {
@@ -485,6 +490,7 @@ def build_many_outputs(
     use_model_metabolite_ids: bool = False,
     use_database_secondary_metabolite_ids: bool = False,
     metabolite_id_compartments: bool | None = None,
+    compartment: str | None = None,
     save_kegg_map: bool = False,
     save_html: bool = False,
 ) -> BioEmmaBatchResult:
@@ -534,6 +540,7 @@ def build_many_outputs(
                     use_database_secondary_metabolite_ids
                 ),
                 metabolite_id_compartments=metabolite_id_compartments,
+                compartment=compartment,
                 save_kegg_map=save_kegg_map,
                 save_html=save_html,
                 **kwargs,
@@ -580,6 +587,7 @@ def build_many_outputs(
         "count": len(results),
         "items": [result.summary for result in results],
         "paths": {key: str(path) for key, path in paths.items()},
+        "compartment_filter": _normalize_compartment_filter(compartment),
         "visualization_options": _visualization_options_summary(options),
         "metabolite_id_options": {
             "use_model_metabolite_ids": use_model_metabolite_ids,
@@ -688,6 +696,14 @@ def _mapper_visualization_kwargs(options: VisualizationOptions) -> dict[str, Any
 
 def _resolve_metabolite_id_compartments(database: str, value: bool | None) -> bool:
     return database == "BIGG" if value is None else bool(value)
+
+
+def _normalize_compartment_filter(value: str | None) -> str | None:
+    if value is None:
+        return None
+
+    value = str(value).strip()
+    return value or None
 
 
 def _visualization_options_summary(options: VisualizationOptions) -> dict[str, Any]:

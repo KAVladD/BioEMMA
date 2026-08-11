@@ -167,6 +167,8 @@ def test_cli_build_writes_workflow_outputs(monkeypatch, tmp_path):
             str(tmp_path / "cli-out"),
             "--database",
             "BIGG",
+            "--compartment",
+            "c",
             "--scaling-factor",
             "5",
             "--axis-epsilon",
@@ -186,6 +188,9 @@ def test_cli_build_writes_workflow_outputs(monkeypatch, tmp_path):
     assert (output_dir / "kegg_escher_map.json").is_file()
     assert (output_dir / "kegg_source_reconstruction.json").is_file()
     assert (output_dir / "summary.json").is_file()
+    saved_summary = json.loads((output_dir / "summary.json").read_text(encoding="utf-8"))
+    assert saved_summary["compartment_filter"] == "c"
+    assert saved_summary["map_stats"]["model_matching"]["compartment_filter"] == "c"
     assert "escher_map_json:" in completed.stdout
     assert "kegg_escher_map_json:" in completed.stdout
     assert "map_stats:" in completed.stdout

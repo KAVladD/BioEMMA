@@ -66,3 +66,28 @@ def test_kegg_map_read_from_url_reads_response_without_temp_file(monkeypatch, tm
     assert len(kegg_map.metabolites) == 31
     assert len(kegg_map.reactions) == 56
     assert not (tmp_path / "temp.xml").exists()
+
+
+def test_kegg_map_skips_entries_without_layout_position():
+    kegg_map = KeggMap()
+    kegg_map.read_from_file(
+        """
+        <pathway>
+          <entry id="1" name="cpd:C00001" type="compound">
+            <graphics name="C00001" type="circle"/>
+          </entry>
+          <entry id="2" name="rn:R00001" type="reaction" reaction="rn:R00001">
+            <graphics name="R00001" type="rectangle"/>
+          </entry>
+          <entry id="3" name="cpd:C00002" type="compound">
+            <graphics name="C00002" type="circle" x="10" y="20"/>
+          </entry>
+          <entry id="4" name="rn:R00002" type="reaction" reaction="rn:R00002">
+            <graphics name="R00002" type="rectangle" x="30" y="40"/>
+          </entry>
+        </pathway>
+        """
+    )
+
+    assert kegg_map.metabolites == ["C00002"]
+    assert kegg_map.reactions == ["R00002"]

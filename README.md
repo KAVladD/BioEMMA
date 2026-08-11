@@ -85,8 +85,8 @@ For a model-derived map, BioEMMA keeps the KEGG reaction ID in the reaction
 
 - if the KEGG reaction matched the COBRA model through a BiGG reaction
   annotation, use the matched model BiGG ID;
-- if the reaction matched through KEGG or SEED only, keep the default BiGG alias
-  resolved from the bundled mapping table;
+- if the reaction matched through KEGG, SEED, MetaCyc, Rhea, or EC only, keep
+  the default BiGG alias resolved from the bundled mapping table;
 - for pure KEGG maps saved with `save_kegg_map=True`, use the default mapped
   alias because there is no model reaction match to prefer.
 
@@ -139,6 +139,28 @@ back through the bundled MetaNetX mappings, and finally falls back to the COBRA
 model ID if no database identifier is available. If both
 `use_model_metabolite_ids` and `use_database_secondary_metabolite_ids` are set,
 the model-ID mode takes priority.
+
+### Compartment filtering
+
+By default, BioEMMA considers all matched COBRA model reactions. To build a
+model-derived map for one compartment, pass the COBRA compartment ID with
+`compartment`:
+
+```python
+result = build_outputs(
+    model="path/to/eukaryotic_model.xml",
+    pathway="rn00010",
+    output_dir="out",
+    database="BIGG",
+    compartment="m",
+)
+```
+
+For example, `compartment="m"` keeps KEGG reactions only when the matched COBRA
+reaction uses the mitochondrial compartment. This is useful for eukaryotic
+models where the same pathway reaction can appear in several compartments.
+When several model reactions match the same KEGG reaction, BioEMMA chooses a
+matching reaction from the requested compartment.
 
 Visualization layout settings can be tuned with `VisualizationOptions`:
 
@@ -244,6 +266,13 @@ included where the selected database representation supports them.
 
 To keep primary IDs database-based and also convert secondary metabolite IDs to
 the selected database, add `--use-database-secondary-metabolite-ids`.
+
+To build a model-derived map for one COBRA compartment, add `--compartment`
+with the compartment ID:
+
+```bash
+bioemma build --model path/to/model.xml --kgml path/to/rn00010.xml --output-dir out --compartment m
+```
 
 If cobrapy cannot access its default cache directory on Windows, set a local
 cache directory before running tests or CLI commands:

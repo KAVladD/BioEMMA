@@ -53,6 +53,8 @@ class KeggMap():
         entrys = xml.find_all("entry", type="compound")
         for entry in entrys:
             entry_graphics = entry.graphics
+            if not self._has_position(entry_graphics):
+                continue
             metabolite_name = entry_graphics["name"]
             metabolite_pos = (entry_graphics["x"],
                                 entry_graphics["y"])
@@ -69,6 +71,8 @@ class KeggMap():
             reactions = entry.get("reaction")
 
             if not entry_graphics or not reactions:
+                continue
+            if not self._has_position(entry_graphics):
                 continue
 
             for reaction_name in self._split_kegg_ids(reactions, "rn"):
@@ -126,6 +130,10 @@ class KeggMap():
                 }
                 
                 self.reaction_types[reaction_name] = reaction_type
+
+    @staticmethod
+    def _has_position(graphics):
+        return bool(graphics and graphics.get("x") and graphics.get("y"))
 
     @staticmethod
     def _split_kegg_ids(value, namespace):

@@ -72,6 +72,7 @@ def build(args) -> None:
                 args.use_database_secondary_metabolite_ids
             ),
             metabolite_id_compartments=args.metabolite_id_compartments,
+            compartment=args.compartment,
             save_kegg_map=args.save_kegg_map,
             run_fba=args.run_fba,
             save_html=args.save_html,
@@ -112,6 +113,7 @@ def build(args) -> None:
             args.use_database_secondary_metabolite_ids
         ),
         metabolite_id_compartments=args.metabolite_id_compartments,
+        compartment=args.compartment,
         save_kegg_map=args.save_kegg_map,
         run_fba=args.run_fba,
         save_html=args.save_html,
@@ -176,6 +178,14 @@ def main() -> None:
         help=(
             "Include model compartments in metabolite output where supported. "
             "Defaults to on for BIGG model IDs and off otherwise."
+        ),
+    )
+    build_parser.add_argument(
+        "--compartment",
+        default=None,
+        help=(
+            "Keep only model-matched reactions whose COBRA reaction uses this "
+            "compartment ID, for example 'm' for mitochondrion."
         ),
     )
     build_parser.add_argument("--save-kegg-map", action="store_true")

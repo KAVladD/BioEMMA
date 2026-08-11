@@ -128,6 +128,190 @@ def test_model_bigg_match_overrides_default_reaction_alias():
     assert kegg_reaction["bigg_id"] == "PGAM_h"
 
 
+def test_model_rhea_annotation_matches_reaction():
+    reactions = {
+        "R01518": {
+            "ids": {"KEGG": "R01518", "BIGG": "PGAM_h", "SEED": "rxn01106"},
+            "position": ("50", "0"),
+            "substrates": {"main": [], "side": []},
+            "products": {"main": [], "side": []},
+            "reversibility": "reversible",
+        },
+    }
+
+    class FakeReaction:
+        def __init__(self, annotation):
+            self.annotation = annotation
+            self.metabolites = {}
+
+    class FakeModel:
+        reactions = [FakeReaction({"rhea": "15902"})]
+        metabolites = []
+
+    rhea_map = EscherMapper({}, reactions, scaling_factor=1).build_map(FakeModel())
+    rhea_reaction = next(iter(rhea_map[1]["reactions"].values()))
+
+    assert rhea_reaction["bigg_id"] == "PGAM_h"
+
+
+def test_model_ec_annotation_matches_when_mapping_has_ec():
+    reactions = {
+        "R01518": {
+            "ids": {"KEGG": "R01518", "BIGG": "PGAM_h", "SEED": "rxn01106"},
+            "position": ("50", "0"),
+            "substrates": {"main": [], "side": []},
+            "products": {"main": [], "side": []},
+            "reversibility": "reversible",
+        },
+    }
+
+    class FakeReaction:
+        def __init__(self, annotation):
+            self.annotation = annotation
+            self.metabolites = {}
+
+    class FakeModel:
+        reactions = [FakeReaction({"ec-code": "5.4.2.1"})]
+        metabolites = []
+
+    mapper = EscherMapper({}, reactions, scaling_factor=1)
+    mapper.r_mapper["R01518"]._ec_all = ["5.4.2.1"]
+    ec_map = mapper.build_map(FakeModel())
+    ec_reaction = next(iter(ec_map[1]["reactions"].values()))
+
+    assert ec_reaction["bigg_id"] == "PGAM_h"
+
+
+def test_model_bigg_match_is_preferred_over_earlier_ec_match():
+    reactions = {
+        "R01518": {
+            "ids": {"KEGG": "R01518", "BIGG": "PGAM_h", "SEED": "rxn01106"},
+            "position": ("50", "0"),
+            "substrates": {"main": [], "side": []},
+            "products": {"main": [], "side": []},
+            "reversibility": "reversible",
+        },
+    }
+
+    class FakeReaction:
+        def __init__(self, annotation):
+            self.annotation = annotation
+            self.metabolites = {}
+
+    class FakeModel:
+        reactions = [
+            FakeReaction({"ec-code": "5.4.2.1"}),
+            FakeReaction({"bigg.reaction": "PGM"}),
+        ]
+        metabolites = []
+
+    mapper = EscherMapper({}, reactions, scaling_factor=1)
+    mapper.r_mapper["R01518"]._ec_all = ["5.4.2.1"]
+    mapper.r_mapper["R01518"]._bigg_all.append("PGM")
+
+    escher_map = mapper.build_map(FakeModel())
+    reaction = next(iter(escher_map[1]["reactions"].values()))
+
+    assert reaction["bigg_id"] == "PGM"
+
+
+def test_compartment_filter_selects_requested_model_reaction_compartment():
+    metabolites = {
+        "C00001": {
+            "ids": {"KEGG": "C00001", "BIGG": "h2o", "SEED": "cpd00001"},
+            "position": ("0", "0"),
+        },
+        "C00002": {
+            "ids": {"KEGG": "C00002", "BIGG": "atp", "SEED": "cpd00002"},
+            "position": ("100", "0"),
+        },
+    }
+    reactions = {
+        "R00001": {
+            "ids": {"KEGG": "R00001", "BIGG": "RXN_ONE", "SEED": "rxn00001"},
+            "position": ("50", "0"),
+            "substrates": {"main": ["C00001"], "side": []},
+            "products": {"main": ["C00002"], "side": []},
+            "reversibility": "irreversible",
+        },
+        "R00002": {
+            "ids": {"KEGG": "R00002", "BIGG": "RXN_TWO", "SEED": "rxn00002"},
+            "position": ("150", "0"),
+            "substrates": {"main": ["C00001"], "side": []},
+            "products": {"main": ["C00002"], "side": []},
+            "reversibility": "irreversible",
+        },
+    }
+
+    class FakeMetabolite:
+        def __init__(self, metabolite_id, compartment, kegg_id, bigg_id):
+            self.id = metabolite_id
+            self.name = metabolite_id
+            self.compartment = compartment
+            self.annotation = {
+                "kegg.compound": kegg_id,
+                "bigg.metabolite": bigg_id,
+            }
+
+    class FakeReaction:
+        def __init__(self, reaction_id, compartment):
+            self.annotation = {"kegg.reaction": reaction_id}
+            self.compartments = {compartment}
+            h2o = FakeMetabolite(
+                f"h2o_{compartment}",
+                compartment,
+                "C00001",
+                "h2o",
+            )
+            atp = FakeMetabolite(
+                f"atp_{compartment}",
+                compartment,
+                "C00002",
+                "atp",
+            )
+            self.metabolites = {h2o: -1, atp: 1}
+
+    class FakeModel:
+        def __init__(self):
+            self.reactions = [
+                FakeReaction("R00001", "c"),
+                FakeReaction("R00001", "m"),
+                FakeReaction("R00002", "c"),
+            ]
+            self.metabolites = [
+                metabolite
+                for reaction in self.reactions
+                for metabolite in reaction.metabolites
+            ]
+
+    mapper = EscherMapper(
+        metabolites,
+        reactions,
+        scaling_factor=1,
+        use_model_metabolite_ids=True,
+        metabolite_id_compartments=True,
+        compartment_filter=" m ",
+    )
+
+    escher_map = mapper.build_map(FakeModel())
+    model = escher_map[1]
+    reaction_names = {
+        reaction["name"] for reaction in model["reactions"].values()
+    }
+    primary_nodes = [
+        node
+        for node in model["nodes"].values()
+        if node.get("node_type") == "metabolite" and node.get("node_is_primary")
+    ]
+
+    assert reaction_names == {"R00001"}
+    assert {node["bigg_id"] for node in primary_nodes} == {"h2o_m", "atp_m"}
+    assert {node.get("compartment") for node in primary_nodes} == {"m"}
+    assert mapper.map_stats["model_matching"]["compartment_filter"] == "m"
+    assert mapper.map_stats["model_matching"]["matched_reactions"] == 1
+    assert mapper.map_stats["model_matching"]["unmatched_reactions"] == 1
+
+
 def test_multimarker_distance_options_affect_aligned_reactions():
     metabolites = {
         "C00001": {
@@ -267,6 +451,49 @@ def test_remove_orphan_metabolites_removes_all_unreferenced_metabolite_nodes():
     assert all_nodes[1] is None
     assert all_nodes[2] is None
     assert all_nodes[3] is not None
+
+
+def test_unmatched_metabolite_filter_keeps_nodes_referenced_by_visible_reactions():
+    metabolites = {
+        "C00001": {
+            "ids": {"KEGG": "C00001", "BIGG": "h2o", "SEED": "cpd00001"},
+            "position": ("0", "0"),
+        },
+        "C00002": {
+            "ids": {"KEGG": "C00002", "BIGG": "atp", "SEED": "cpd00002"},
+            "position": ("100", "0"),
+        },
+    }
+    reactions = {
+        "R00001": {
+            "ids": {"KEGG": "R00001", "BIGG": "RXN_ONE", "SEED": "rxn00001"},
+            "position": ("50", "0"),
+            "substrates": {"main": ["C00001"], "side": []},
+            "products": {"main": ["C00002"], "side": []},
+            "reversibility": "irreversible",
+        },
+    }
+
+    class FakeReaction:
+        annotation = {"kegg.reaction": "R00001"}
+        metabolites = {}
+
+    class FakeModel:
+        reactions = [FakeReaction()]
+        metabolites = []
+
+    escher_map = EscherMapper(metabolites, reactions, scaling_factor=1).build_map(
+        FakeModel()
+    )
+    validation = validate_escher_map(escher_map)
+    primary_nodes = [
+        node
+        for node in escher_map[1]["nodes"].values()
+        if node.get("node_type") == "metabolite" and node.get("node_is_primary")
+    ]
+
+    assert validation["bad_segment_refs"] == []
+    assert {node["name"] for node in primary_nodes} == {"C00001", "C00002"}
 
 
 def test_build_map_adds_secondary_metabolites_and_valid_segments(monkeypatch, tmp_path):

@@ -26,6 +26,7 @@ class EscherMapper:
                  use_model_metabolite_ids: bool = False,
                  use_database_secondary_metabolite_ids: bool = False,
                  metabolite_id_compartments: bool | None = None,
+                 compartment_filter: str | None = None,
                  canvas_width: float = 1000,
                  canvas_height: float = 1000,
                  axis_epsilon: float = 2,):
@@ -78,6 +79,9 @@ class EscherMapper:
             self.DB == "BIGG"
             if metabolite_id_compartments is None
             else bool(metabolite_id_compartments)
+        )
+        self.compartment_filter = self._normalize_compartment_filter(
+            compartment_filter
         )
 
         self.segments_counter = 0
@@ -234,6 +238,7 @@ class EscherMapper:
             "unmatched_metabolites": len(anti_metabolites),
             "matched_reactions": len(cobra_model_reactions),
             "unmatched_reactions": len(anti_reactions),
+            "compartment_filter": self.compartment_filter,
         }
         if not self.include_kegg_only:
             all_nodes, r2indx_dict = self._subtract_not_in_model_reactions(
@@ -253,6 +258,8 @@ class EscherMapper:
                 global_nodes_idxs,
                 all_nodes,
                 anti_metabolites,
+                r_desc,
+                r2indx_dict,
             )
             self._record_map_stage(
                 "model_metabolite_filter",
@@ -876,34 +883,63 @@ class EscherMapper:
         for r_name in r_nodes.keys():
 
             keggs = set([r_name])
-            biggs = set(self.r_mapper[r_name].bigg_all) if self.r_mapper.get(r_name) else set()
-            seeds = set(self.r_mapper[r_name].seed_all) if self.r_mapper.get(r_name) else set()
+            mapping_entry = self.r_mapper.get(r_name)
+            biggs = set(mapping_entry.bigg_all) if mapping_entry else set()
+            seeds = set(mapping_entry.seed_all) if mapping_entry else set()
+            metacycs = set(mapping_entry.metacyc_all) if mapping_entry else set()
+            rheas = set(mapping_entry.rhea_all) if mapping_entry else set()
+            ecs = set(mapping_entry.ec_all) if mapping_entry else set()
 
-            found = None
-            found_bigg_id = None
+            best_match = None
+            best_score = -1
+            best_bigg_id = None
             for rxn in model.reactions:
+                if not self._reaction_matches_compartment_filter(rxn):
+                    continue
 
                 rxn_kegg = self._annotation_values(rxn.annotation, "kegg.reaction")
                 rxn_bigg = self._annotation_values(rxn.annotation, "bigg.reaction")
                 rxn_seed = self._annotation_values(rxn.annotation, "seed.reaction")
+                rxn_metacyc = self._annotation_values(
+                    rxn.annotation,
+                    "metacyc.reaction",
+                )
+                rxn_rhea = self._annotation_values(rxn.annotation, "rhea")
+                rxn_ec = self._annotation_values_any(
+                    rxn.annotation,
+                    ("ec-code", "ec.number", "ec_number", "ec"),
+                )
 
                 bigg_matches = biggs & set(rxn_bigg)
+                score = 0
+                candidate_bigg_id = None
 
-                if (keggs & set(rxn_kegg) or
-                    bigg_matches or
-                    seeds & set(rxn_seed)):
-                    found = rxn
-                    if bigg_matches:
-                        found_bigg_id = self._select_model_reaction_bigg_id(
-                            rxn_bigg,
-                            bigg_matches,
-                        )
-                    break
+                if bigg_matches:
+                    score = 100
+                    candidate_bigg_id = self._select_model_reaction_bigg_id(
+                        rxn_bigg,
+                        bigg_matches,
+                    )
+                elif keggs & set(rxn_kegg):
+                    score = 90
+                elif seeds & set(rxn_seed):
+                    score = 80
+                elif metacycs & set(rxn_metacyc):
+                    score = 70
+                elif rheas & set(rxn_rhea):
+                    score = 70
+                elif ecs & set(rxn_ec):
+                    score = 10
 
-            if found:
-                matched[r_name] = found
-                if found_bigg_id:
-                    model_reaction_bigg_ids[r_name] = found_bigg_id
+                if score and score > best_score:
+                    best_match = rxn
+                    best_score = score
+                    best_bigg_id = candidate_bigg_id
+
+            if best_match:
+                matched[r_name] = best_match
+                if best_bigg_id:
+                    model_reaction_bigg_ids[r_name] = best_bigg_id
             else:
                 anti_reactions.append(r_name)
 
@@ -918,6 +954,12 @@ class EscherMapper:
         elif not isinstance(values, (list, tuple, set)):
             values = [values]
         return [str(value) for value in values if value]
+
+    def _annotation_values_any(self, annotation, keys):
+        values = []
+        for key in keys:
+            values.extend(self._annotation_values(annotation, key))
+        return values
 
     def _select_model_reaction_bigg_id(self, rxn_bigg, bigg_matches):
         for value in rxn_bigg:
@@ -975,6 +1017,7 @@ class EscherMapper:
                     (met, 1)
                     for met in model.metabolites
                     if self._model_metabolite_matches_map_metabolite(met, m_name)
+                    and self._model_metabolite_matches_compartment_filter(met)
                 ]
 
             if candidates:
@@ -1001,7 +1044,14 @@ class EscherMapper:
         return list(candidate_counts.items())
 
     def _select_model_metabolite_candidate(self, candidates):
-        return sorted(candidates, key=lambda item: (-item[1], item[0].id))[0][0]
+        return sorted(
+            candidates,
+            key=lambda item: (
+                -item[1],
+                not self._model_metabolite_matches_compartment_filter(item[0]),
+                item[0].id,
+            ),
+        )[0][0]
 
     def _model_metabolite_matches_map_metabolite(self, met, m_name):
         return bool(self._model_metabolite_ids(met) & self._map_metabolite_ids(m_name))
@@ -1138,6 +1188,37 @@ class EscherMapper:
         compartment = getattr(met, "compartment", None)
         return str(compartment) if compartment else None
 
+    def _normalize_compartment_filter(self, compartment):
+        if compartment is None:
+            return None
+
+        compartment = str(compartment).strip()
+        return compartment or None
+
+    def _reaction_matches_compartment_filter(self, reaction):
+        if self.compartment_filter is None:
+            return True
+
+        return self.compartment_filter in self._model_reaction_compartments(reaction)
+
+    def _model_reaction_compartments(self, reaction):
+        compartments = getattr(reaction, "compartments", None)
+        if compartments:
+            return {str(compartment) for compartment in compartments if compartment}
+
+        found = set()
+        for metabolite in getattr(reaction, "metabolites", {}):
+            compartment = self._model_metabolite_compartment(metabolite)
+            if compartment:
+                found.add(compartment)
+        return found
+
+    def _model_metabolite_matches_compartment_filter(self, metabolite):
+        if self.compartment_filter is None:
+            return True
+
+        return self._model_metabolite_compartment(metabolite) == self.compartment_filter
+
     def _strip_model_compartment(self, metabolite_id, compartment):
         if compartment and metabolite_id.endswith(f"_{compartment}"):
             return metabolite_id[: -(len(compartment) + 1)]
@@ -1164,11 +1245,29 @@ class EscherMapper:
 
         return all_nodes, r2indx_dict
     
-    def _subtract_not_in_model_metabolites(self, global_idxs, nodes, anti_ms):
+    def _subtract_not_in_model_metabolites(
+        self,
+        global_idxs,
+        nodes,
+        anti_ms,
+        reactions=None,
+        reaction_index=None,
+    ):
+        referenced_nodes = set()
+        if reactions is not None and reaction_index is not None:
+            for r_name, reaction in reactions.items():
+                if reaction_index.get(r_name) is None:
+                    continue
+                for segment in reaction.get("segments", {}).values():
+                    referenced_nodes.add(segment["from_node_id"])
+                    referenced_nodes.add(segment["to_node_id"])
 
         for m in anti_ms:
+            node_idx = global_idxs["metabolites"][m]
+            if node_idx in referenced_nodes:
+                continue
 
-            nodes[global_idxs["metabolites"][m]] = None
+            nodes[node_idx] = None
 
         return nodes
     
