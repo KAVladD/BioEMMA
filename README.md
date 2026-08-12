@@ -86,10 +86,15 @@ For a model-derived map, BioEMMA keeps the KEGG reaction ID in the reaction
 - if the KEGG reaction matched the COBRA model through a BiGG reaction
   annotation, use the matched model BiGG ID;
 - if the reaction matched through KEGG, SEED, MetaCyc, Rhea, EC-derived BiGG,
-  or EC only, keep the default BiGG alias resolved from the bundled mapping
-  table;
+  or EC only, use the selected model reaction identifier where available;
 - for pure KEGG maps saved with `save_kegg_map=True`, use the default mapped
   alias because there is no model reaction match to prefer.
+
+If several KEGG entries match the same COBRA model reaction, BioEMMA keeps the
+highest-confidence match and treats the weaker entries as not present in the
+model-derived map. This prevents broad EC matches from drawing the same flux
+twice, while still allowing distinct cofactor or compartment-specific model
+reactions to appear as separate reactions.
 
 This avoids cases where a KEGG reaction such as `R01518` matches model reaction
 `PGM`, but the map displays and expects flux data under the first mapped alias

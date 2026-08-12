@@ -391,6 +391,124 @@ def test_compartment_filter_selects_requested_model_reaction_compartment():
     assert mapper.map_stats["model_matching"]["unmatched_reactions"] == 1
 
 
+def test_non_bigg_model_match_uses_selected_model_reaction_id():
+    reactions = {
+        "R01518": {
+            "ids": {"KEGG": "R01518", "BIGG": "PGAM_h", "SEED": "rxn01106"},
+            "position": ("50", "0"),
+            "substrates": {"main": [], "side": []},
+            "products": {"main": [], "side": []},
+            "reversibility": "reversible",
+        },
+    }
+
+    class FakeReaction:
+        id = "PGM_c"
+        annotation = {"ec-code": "5.4.2.1", "bigg.reaction": "PGM_c"}
+        metabolites = {}
+
+    class FakeModel:
+        reactions = [FakeReaction()]
+        metabolites = []
+
+    mapper = EscherMapper({}, reactions, scaling_factor=1)
+    mapper.r_mapper["R01518"]._ec_all = ["5.4.2.1"]
+    mapper.r_mapper["R01518"]._bigg_all = ["PGAM_h"]
+
+    escher_map = mapper.build_map(FakeModel())
+    reaction = next(iter(escher_map[1]["reactions"].values()))
+
+    assert reaction["bigg_id"] == "PGM_c"
+    assert mapper.map_stats["model_matching"]["reaction_match_methods"] == {"ec": 1}
+
+
+def test_duplicate_kegg_matches_to_same_model_reaction_keep_stronger_match():
+    reactions = {
+        "R01061": {
+            "ids": {"KEGG": "R01061", "BIGG": "GAPD", "SEED": "rxn00781"},
+            "position": ("50", "0"),
+            "substrates": {"main": [], "side": []},
+            "products": {"main": [], "side": []},
+            "reversibility": "reversible",
+        },
+        "R01063": {
+            "ids": {"KEGG": "R01063", "BIGG": "GAPDH_nadp_hi", "SEED": "rxn00782"},
+            "position": ("50", "0"),
+            "substrates": {"main": [], "side": []},
+            "products": {"main": [], "side": []},
+            "reversibility": "reversible",
+        },
+    }
+
+    class FakeReaction:
+        id = "GAPD"
+        annotation = {"bigg.reaction": "GAPD", "ec-code": "1.2.1.12"}
+        metabolites = {}
+
+    class FakeModel:
+        reactions = [FakeReaction()]
+        metabolites = []
+
+    mapper = EscherMapper({}, reactions, scaling_factor=1)
+    mapper.r_mapper["R01061"]._bigg_all = ["GAPD"]
+    mapper.r_mapper["R01063"]._bigg_all = ["GAPDH_nadp_hi"]
+    mapper.r_mapper["R01063"]._ec_all = ["1.2.1.12"]
+
+    escher_map = mapper.build_map(FakeModel())
+    model_reactions = escher_map[1]["reactions"].values()
+
+    assert {reaction["name"] for reaction in model_reactions} == {"R01061"}
+    assert mapper.map_stats["model_matching"]["matched_reactions"] == 1
+    assert mapper.map_stats["model_matching"]["unmatched_reactions"] == 1
+    assert mapper.map_stats["model_matching"]["reaction_match_methods"] == {
+        "bigg_ec_fallback": 1
+    }
+
+
+def test_distinct_model_reactions_at_same_kegg_position_are_kept():
+    reactions = {
+        "R01061": {
+            "ids": {"KEGG": "R01061", "BIGG": "GAPD", "SEED": "rxn00781"},
+            "position": ("50", "0"),
+            "substrates": {"main": [], "side": []},
+            "products": {"main": [], "side": []},
+            "reversibility": "reversible",
+        },
+        "R01063": {
+            "ids": {"KEGG": "R01063", "BIGG": "GAPDy", "SEED": "rxn00782"},
+            "position": ("50", "0"),
+            "substrates": {"main": [], "side": []},
+            "products": {"main": [], "side": []},
+            "reversibility": "reversible",
+        },
+    }
+
+    class FakeReaction:
+        def __init__(self, reaction_id, ec):
+            self.id = reaction_id
+            self.annotation = {"bigg.reaction": reaction_id, "ec-code": ec}
+            self.metabolites = {}
+
+    class FakeModel:
+        reactions = [
+            FakeReaction("GAPD", "1.2.1.12"),
+            FakeReaction("GAPDy", "1.2.1.13"),
+        ]
+        metabolites = []
+
+    mapper = EscherMapper({}, reactions, scaling_factor=1, markers_dist=10)
+    mapper.r_mapper["R01061"]._bigg_all = ["GAPD"]
+    mapper.r_mapper["R01063"]._bigg_all = ["GAPDy"]
+
+    escher_map = mapper.build_map(FakeModel())
+    positions = {
+        reaction["bigg_id"]: (float(reaction["label_x"]), float(reaction["label_y"]))
+        for reaction in escher_map[1]["reactions"].values()
+    }
+
+    assert set(positions) == {"GAPD", "GAPDy"}
+
+
 def test_multimarker_distance_options_affect_aligned_reactions():
     metabolites = {
         "C00001": {

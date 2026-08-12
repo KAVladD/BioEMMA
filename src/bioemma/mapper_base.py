@@ -36,7 +36,6 @@ class EscherMapper:
         self.r_mapper = MetaNetXMapper(resource_path("reaction_mapping.tsv"), "first")
 
         self.metabolites = metabolites
-        self.reactions = reactions
 
         self.map_main_metabolites = []
         
@@ -72,6 +71,7 @@ class EscherMapper:
             else self.markers_dist * 3
         )
         self.DB = database # SEED or BIGG
+        self.reactions = reactions
         self.use_model_metabolite_ids = use_model_metabolite_ids
         self.use_database_secondary_metabolite_ids = (
             use_database_secondary_metabolite_ids
@@ -438,7 +438,7 @@ class EscherMapper:
         for value in values:
             counts[value] = counts.get(value, 0) + 1
         return dict(sorted(counts.items()))
-    
+
     def _prepare_elements_descriptions(self, elements, generation_func):
 
         descs = {}
@@ -898,6 +898,7 @@ class EscherMapper:
 
         matched = {}
         model_reaction_bigg_ids = {}
+        model_reaction_match_scores = {}
         anti_reactions = []
         self._model_reaction_match_methods = {}
 
@@ -991,13 +992,63 @@ class EscherMapper:
 
             if best_match:
                 matched[r_name] = best_match
+                model_reaction_match_scores[r_name] = best_score
                 self._model_reaction_match_methods[r_name] = best_method
-                if best_bigg_id:
-                    model_reaction_bigg_ids[r_name] = best_bigg_id
+                output_bigg_id = best_bigg_id or self._model_reaction_output_id(
+                    best_match
+                )
+                if output_bigg_id:
+                    model_reaction_bigg_ids[r_name] = output_bigg_id
             else:
                 anti_reactions.append(r_name)
 
+        self._deduplicate_model_reaction_matches(
+            matched,
+            anti_reactions,
+            model_reaction_bigg_ids,
+            model_reaction_match_scores,
+        )
+
         return matched, anti_reactions, model_reaction_bigg_ids
+
+    def _deduplicate_model_reaction_matches(
+        self,
+        matched,
+        anti_reactions,
+        model_reaction_bigg_ids,
+        model_reaction_match_scores,
+    ):
+        grouped = {}
+        for r_name, reaction in matched.items():
+            grouped.setdefault(
+                self._model_reaction_match_key(reaction),
+                [],
+            ).append(r_name)
+
+        for names in grouped.values():
+            if len(names) < 2:
+                continue
+
+            keep = sorted(
+                names,
+                key=lambda name: (
+                    -model_reaction_match_scores.get(name, 0),
+                    name,
+                ),
+            )[0]
+            for name in names:
+                if name == keep:
+                    continue
+                matched.pop(name, None)
+                model_reaction_bigg_ids.pop(name, None)
+                self._model_reaction_match_methods.pop(name, None)
+                anti_reactions.append(name)
+
+    def _model_reaction_match_key(self, reaction):
+        reaction_id = getattr(reaction, "id", None)
+        if reaction_id:
+            return str(reaction_id)
+        return f"object:{id(reaction)}"
 
     def _annotation_values(self, annotation, key):
         values = annotation.get(key, [])
@@ -1020,6 +1071,17 @@ class EscherMapper:
             if value in bigg_matches:
                 return value
         return sorted(bigg_matches)[0] if bigg_matches else None
+
+    def _model_reaction_output_id(self, reaction):
+        rxn_bigg = self._annotation_values(
+            getattr(reaction, "annotation", {}),
+            "bigg.reaction",
+        )
+        if rxn_bigg:
+            return rxn_bigg[0]
+
+        reaction_id = getattr(reaction, "id", None)
+        return str(reaction_id) if reaction_id else None
 
     def _apply_model_reaction_bigg_ids(self, r_desc, model_reaction_bigg_ids):
         for r_name, bigg_id in model_reaction_bigg_ids.items():
