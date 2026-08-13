@@ -28,6 +28,8 @@ class EscherMapper:
                  metabolite_id_compartments: bool | None = None,
                  compartment_filter: str | None = None,
                  use_fallback_matching: bool = True,
+                 use_bigg_fallback_matching: bool = True,
+                 use_seed_fallback_matching: bool = True,
                  canvas_width: float = 1000,
                  canvas_height: float = 1000,
                  axis_epsilon: float = 2,):
@@ -85,6 +87,8 @@ class EscherMapper:
             compartment_filter
         )
         self.use_fallback_matching = bool(use_fallback_matching)
+        self.use_bigg_fallback_matching = bool(use_bigg_fallback_matching)
+        self.use_seed_fallback_matching = bool(use_seed_fallback_matching)
 
         self.segments_counter = 0
 
@@ -243,6 +247,8 @@ class EscherMapper:
             "unmatched_reactions": len(anti_reactions),
             "compartment_filter": self.compartment_filter,
             "use_fallback_matching": self.use_fallback_matching,
+            "use_bigg_fallback_matching": self.use_bigg_fallback_matching,
+            "use_seed_fallback_matching": self.use_seed_fallback_matching,
             "reaction_match_methods": self._count_values(
                 self._model_reaction_match_methods.values()
             ),
@@ -439,6 +445,12 @@ class EscherMapper:
             counts[value] = counts.get(value, 0) + 1
         return dict(sorted(counts.items()))
 
+    def _allow_bigg_ec_fallback(self):
+        return self.use_fallback_matching and self.use_bigg_fallback_matching
+
+    def _allow_seed_ec_fallback(self):
+        return self.use_fallback_matching and self.use_seed_fallback_matching
+
     def _prepare_elements_descriptions(self, elements, generation_func):
 
         descs = {}
@@ -484,7 +496,7 @@ class EscherMapper:
         if self.DB == "BIGG":
             id = self._reaction_bigg_output_id(ids)
         elif self.DB == "SEED":
-            id = str(ids["SEED"]) + "_c0"
+            id = self._reaction_seed_output_id(ids)
         elif self.DB == "KEGG":
             id = ids["KEGG"]
 
@@ -520,11 +532,25 @@ class EscherMapper:
         return reaction_dict
 
     def _reaction_bigg_output_id(self, ids):
-        if not self.use_fallback_matching:
-            mapping_entry = self.r_mapper.get(ids.get("KEGG"))
-            if mapping_entry and mapping_entry.is_ec_fallback:
-                return ""
+        mapping_entry = self.r_mapper.get(ids.get("KEGG"))
+        if (
+            mapping_entry
+            and mapping_entry.is_bigg_ec_fallback
+            and not self._allow_bigg_ec_fallback()
+        ):
+            return ""
         return ids.get("BIGG") or ""
+
+    def _reaction_seed_output_id(self, ids):
+        seed_id = ids.get("SEED") or ""
+        mapping_entry = self.r_mapper.get(ids.get("KEGG"))
+        if (
+            mapping_entry
+            and mapping_entry.is_seed_ec_fallback
+            and not self._allow_seed_ec_fallback()
+        ):
+            return ""
+        return f"{seed_id}_c0" if seed_id else ""
     
     def _generate_node_dict(self, type, pos):
 
@@ -908,9 +934,16 @@ class EscherMapper:
             mapping_entry = self.r_mapper.get(r_name)
             biggs = set(mapping_entry.bigg_all) if mapping_entry else set()
             seeds = set(mapping_entry.seed_all) if mapping_entry else set()
-            fallback_bigg = bool(mapping_entry and mapping_entry.is_ec_fallback)
-            if fallback_bigg and not self.use_fallback_matching:
+            fallback_bigg = bool(
+                mapping_entry and mapping_entry.is_bigg_ec_fallback
+            )
+            fallback_seed = bool(
+                mapping_entry and mapping_entry.is_seed_ec_fallback
+            )
+            if fallback_bigg and not self._allow_bigg_ec_fallback():
                 biggs = set()
+            if fallback_seed and not self._allow_seed_ec_fallback():
+                seeds = set()
             metacycs = (
                 set(mapping_entry.metacyc_all)
                 if mapping_entry and self.use_fallback_matching
@@ -949,6 +982,7 @@ class EscherMapper:
                 )
 
                 bigg_matches = biggs & set(rxn_bigg)
+                seed_matches = seeds & set(rxn_seed)
                 score = 0
                 candidate_bigg_id = None
 
@@ -962,7 +996,7 @@ class EscherMapper:
                 elif keggs & set(rxn_kegg):
                     score = 90
                     method = "kegg"
-                elif seeds & set(rxn_seed):
+                elif seed_matches and not fallback_seed:
                     score = 80
                     method = "seed"
                 elif metacycs & set(rxn_metacyc):
@@ -978,6 +1012,9 @@ class EscherMapper:
                         rxn_bigg,
                         bigg_matches,
                     )
+                elif seed_matches and fallback_seed:
+                    score = 50
+                    method = "seed_ec_fallback"
                 elif ecs & set(rxn_ec):
                     score = 10
                     method = "ec"

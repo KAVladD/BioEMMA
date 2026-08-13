@@ -3,12 +3,55 @@ from pathlib import Path
 import numpy as np
 
 from bioemma.mapper_base import EscherMapper
+from bioemma.metanetx_mapper import MetaNetXMapper
 from bioemma.workflow import build_outputs, validate_escher_map
 
 
 ROOT = Path(__file__).resolve().parents[1]
 KGML = ROOT / "tests" / "data" / "kgml" / "rn00010.xml"
 MODEL = ROOT / "tests" / "data" / "models" / "e_coli_core.xml"
+
+
+def test_reaction_mapper_distinguishes_bigg_and_seed_ec_fallback_markers(tmp_path):
+    mapping_path = tmp_path / "reaction_mapping.tsv"
+    mapping_path.write_text(
+        "\t".join(
+            [
+                "kegg",
+                "mnx_id",
+                "ec",
+                "bigg",
+                "seed",
+                "metacyc",
+                "rhea",
+                "description",
+                "ambiguous",
+            ]
+        )
+        + "\n"
+        + "\t".join(
+            [
+                "R_SEED",
+                "MNXR_SEED",
+                "1.1.1.1",
+                "",
+                "rxnSEED",
+                "",
+                "",
+                "",
+                "seed_ec_fallback(participants>=0.50)",
+            ]
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+
+    mapper = MetaNetXMapper(str(mapping_path))
+    entry = mapper["R_SEED"]
+
+    assert entry.is_seed_ec_fallback is True
+    assert entry.is_bigg_ec_fallback is False
+    assert entry.is_ec_fallback is False
 
 
 def test_build_kegg_map_keeps_first_reaction_index():
@@ -258,6 +301,99 @@ def test_ec_fallback_bigg_mapping_is_ignored_without_fallback_matching():
     assert fallback_reaction["bigg_id"] == "PGM"
     assert fallback_mapper.map_stats["model_matching"]["reaction_match_methods"] == {
         "bigg_ec_fallback": 1
+    }
+
+
+def test_bigg_ec_fallback_can_be_disabled_independently():
+    reactions = {
+        "R01518": {
+            "ids": {"KEGG": "R01518", "BIGG": "PGAM_h", "SEED": "rxn01106"},
+            "position": ("50", "0"),
+            "substrates": {"main": [], "side": []},
+            "products": {"main": [], "side": []},
+            "reversibility": "reversible",
+        },
+    }
+
+    class FakeReaction:
+        annotation = {"bigg.reaction": "PGM"}
+        metabolites = {}
+
+    class FakeModel:
+        reactions = [FakeReaction()]
+        metabolites = []
+
+    mapper = EscherMapper(
+        {},
+        reactions,
+        scaling_factor=1,
+        use_fallback_matching=True,
+        use_bigg_fallback_matching=False,
+    )
+    mapper.r_mapper["R01518"]._bigg_all = ["PGM"]
+    mapper.r_mapper["R01518"]._is_ec_fallback = True
+
+    escher_map = mapper.build_map(FakeModel())
+
+    assert escher_map[1]["reactions"] == {}
+    assert mapper.map_stats["model_matching"]["reaction_match_methods"] == {}
+    assert (
+        mapper.map_stats["model_matching"]["use_bigg_fallback_matching"] is False
+    )
+    assert (
+        mapper.map_stats["model_matching"]["use_seed_fallback_matching"] is True
+    )
+
+
+def test_seed_ec_fallback_can_be_disabled_independently():
+    reactions = {
+        "R01518": {
+            "ids": {"KEGG": "R01518", "BIGG": "", "SEED": "rxnFALLBACK"},
+            "position": ("50", "0"),
+            "substrates": {"main": [], "side": []},
+            "products": {"main": [], "side": []},
+            "reversibility": "reversible",
+        },
+    }
+
+    class FakeReaction:
+        id = "MODEL_SEED"
+        annotation = {"seed.reaction": "rxnFALLBACK"}
+        metabolites = {}
+
+    class FakeModel:
+        reactions = [FakeReaction()]
+        metabolites = []
+
+    disabled_mapper = EscherMapper(
+        {},
+        reactions,
+        scaling_factor=1,
+        use_fallback_matching=True,
+        use_seed_fallback_matching=False,
+    )
+    disabled_mapper.r_mapper["R01518"]._bigg_all = []
+    disabled_mapper.r_mapper["R01518"]._seed_all = ["rxnFALLBACK"]
+    disabled_mapper.r_mapper["R01518"]._is_seed_ec_fallback = True
+    disabled_map = disabled_mapper.build_map(FakeModel())
+
+    enabled_mapper = EscherMapper(
+        {},
+        reactions,
+        scaling_factor=1,
+        use_fallback_matching=True,
+        use_seed_fallback_matching=True,
+    )
+    enabled_mapper.r_mapper["R01518"]._bigg_all = []
+    enabled_mapper.r_mapper["R01518"]._seed_all = ["rxnFALLBACK"]
+    enabled_mapper.r_mapper["R01518"]._is_seed_ec_fallback = True
+    enabled_map = enabled_mapper.build_map(FakeModel())
+
+    assert disabled_map[1]["reactions"] == {}
+    enabled_reaction = next(iter(enabled_map[1]["reactions"].values()))
+    assert enabled_reaction["bigg_id"] == "MODEL_SEED"
+    assert enabled_mapper.map_stats["model_matching"]["reaction_match_methods"] == {
+        "seed_ec_fallback": 1
     }
 
 

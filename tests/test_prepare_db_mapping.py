@@ -1,5 +1,6 @@
 from scripts.prepare_db_mapping import (
     build_ec_fallback_offline,
+    build_seed_ec_fallback_offline,
     parse_reaction_participants,
     participant_overlap,
 )
@@ -56,3 +57,42 @@ def test_ec_fallback_filters_candidates_by_participant_overlap():
 
     assert rows[0]["bigg"] == "GOOD"
     assert rows[0]["ambiguous"] == "ec_fallback(participants>=0.50)"
+
+
+def test_seed_ec_fallback_filters_candidates_by_participant_overlap():
+    mnx_mapping = {
+        "source": {
+            "kegg": ["R_SOURCE"],
+            "ec": ["1.1.1.1"],
+            "participants": ["A", "B", "C", "D"],
+        },
+        "good": {
+            "seed": ["rxnGOOD"],
+            "ec": ["1.1.1.1"],
+            "participants": ["A", "B", "C", "X"],
+        },
+        "lower_overlap": {
+            "seed": ["rxnLOWER"],
+            "ec": ["1.1.1.1"],
+            "participants": ["A", "B", "X"],
+        },
+        "bad": {
+            "seed": ["rxnBAD"],
+            "ec": ["1.1.1.1"],
+            "participants": ["A", "Y"],
+        },
+    }
+    rows = [
+        {
+            "kegg": "R_SOURCE",
+            "mnx_id": "source",
+            "ec": "1.1.1.1",
+            "seed": "",
+            "ambiguous": "",
+        }
+    ]
+
+    build_seed_ec_fallback_offline(mnx_mapping, rows)
+
+    assert rows[0]["seed"] == "rxnGOOD"
+    assert rows[0]["ambiguous"] == "seed_ec_fallback(participants>=0.50)"

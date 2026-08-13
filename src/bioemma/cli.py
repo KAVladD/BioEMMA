@@ -74,6 +74,8 @@ def build(args) -> None:
             metabolite_id_compartments=args.metabolite_id_compartments,
             compartment=args.compartment,
             use_fallback_matching=args.fallback_matching,
+            use_bigg_fallback_matching=args.bigg_fallback_matching,
+            use_seed_fallback_matching=args.seed_fallback_matching,
             save_kegg_map=args.save_kegg_map,
             run_fba=args.run_fba,
             save_html=args.save_html,
@@ -116,6 +118,8 @@ def build(args) -> None:
         metabolite_id_compartments=args.metabolite_id_compartments,
         compartment=args.compartment,
         use_fallback_matching=args.fallback_matching,
+        use_bigg_fallback_matching=args.bigg_fallback_matching,
+        use_seed_fallback_matching=args.seed_fallback_matching,
         save_kegg_map=args.save_kegg_map,
         run_fba=args.run_fba,
         save_html=args.save_html,
@@ -195,9 +199,27 @@ def main() -> None:
         action=argparse.BooleanOptionalAction,
         default=True,
         help=(
-            "Use fallback reaction matching through EC-derived BiGG, MetaCyc, "
-            "Rhea, and EC annotations. Use --no-fallback-matching to keep "
-            "strict KEGG/BiGG/SEED matches only."
+            "Use fallback reaction matching through EC-derived BiGG/SEED, "
+            "MetaCyc, Rhea, and EC annotations. Use --no-fallback-matching "
+            "to keep strict KEGG/BiGG/SEED matches only."
+        ),
+    )
+    build_parser.add_argument(
+        "--bigg-fallback-matching",
+        action=argparse.BooleanOptionalAction,
+        default=True,
+        help=(
+            "Use BiGG identifiers inferred by EC fallback. Requires "
+            "--fallback-matching to be enabled."
+        ),
+    )
+    build_parser.add_argument(
+        "--seed-fallback-matching",
+        action=argparse.BooleanOptionalAction,
+        default=True,
+        help=(
+            "Use SEED identifiers inferred by EC fallback. Requires "
+            "--fallback-matching to be enabled."
         ),
     )
     build_parser.add_argument("--save-kegg-map", action="store_true")

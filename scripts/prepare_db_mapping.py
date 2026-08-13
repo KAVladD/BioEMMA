@@ -4,8 +4,9 @@
 Строит маппинг KEGG <-> BiGG <-> SEED через MNXref namespace
 для метаболитов (chem_xref.tsv) и реакций (reac_xref.tsv).
 
-EC-fallback: если для KEGG reaction нет прямого BiGG маппинга через MNX,
-ищем BiGG реакцию через общий EC номер (тоже из reac_xref.tsv, без API).
+EC-fallback: если для KEGG reaction нет прямого BiGG/SEED маппинга через MNX,
+ищем BiGG или SEED реакцию через общий EC номер и проверяем пересечение
+метаболитов-участников реакции (тоже из reac_xref.tsv/reac_prop.tsv, без API).
 
 Выход:
   - metabolite_mapping.tsv  (KEGG compound -> MNX -> BiGG -> SEED)
@@ -209,6 +210,14 @@ def add_descriptions(rows, mnx_mapping, xref_filepath, primary_ns_prefix):
 
 def parse_reaction_participants(equation):
     return sorted(set(REACTION_PARTICIPANT_RE.findall(equation)))
+
+
+def split_pipe(value):
+    return [part.strip() for part in value.split("|") if part.strip()]
+
+
+def has_ambiguous_marker(ambiguous, marker):
+    return re.search(rf"(?:^|,)\s*{re.escape(marker)}\(", ambiguous) is not None
 
 
 def parse_reaction_props(filepath):
@@ -424,21 +433,139 @@ def build_ec_fallback_offline(
             row["ambiguous"] = f"{amb},{ec_note}" if amb else ec_note
             fallback_count += 1
 
-    print(f"  EC fallback: {fallback_count} reactions got BiGG via EC")
+    print(f"  BiGG EC fallback: {fallback_count} reactions got BiGG via EC")
     print(
-        "  EC fallback candidates rejected by participant overlap: "
+        "  BiGG EC fallback candidates rejected by participant overlap: "
         f"{rejected_by_participants}"
     )
     if discarded_by_best_overlap:
         print(
-            "  EC fallback lower-overlap BiGG IDs discarded: "
+            "  BiGG EC fallback lower-overlap BiGG IDs discarded: "
             f"{discarded_by_best_overlap}"
         )
     if missing_participants:
         print(
-            "  EC fallback rows skipped without participant data: "
+            "  BiGG EC fallback rows skipped without participant data: "
             f"{missing_participants}"
         )
+    return reac_rows
+
+
+def build_seed_ec_fallback_offline(
+    mnx_mapping,
+    reac_rows,
+    min_participant_overlap=EC_FALLBACK_MIN_PARTICIPANT_OVERLAP,
+):
+    """
+    Для реакций без SEED: ищет SEED через общий EC номер.
+
+    Кандидаты берутся по всем MNX-реакциям с тем же EC. Кандидат проходит
+    только если его набор участников покрывает исходную KEGG-реакцию минимум
+    на min_participant_overlap. Если кандидатов несколько, сохраняются только
+    кандидаты с максимальным overlap.
+    """
+    ec_to_seed = defaultdict(list)
+    seen = set()
+
+    for mnx_id, ns_ids in mnx_mapping.items():
+        seeds = ns_ids.get("seed", [])
+        ecs = ns_ids.get("ec", [])
+        if not seeds or not ecs:
+            continue
+
+        participants = set(ns_ids.get("participants", []))
+        for ec in ecs:
+            for seed_id in seeds:
+                key = (ec, seed_id, mnx_id)
+                if key in seen:
+                    continue
+                seen.add(key)
+                ec_to_seed[ec].append(
+                    {
+                        "seed": seed_id,
+                        "mnx_id": mnx_id,
+                        "participants": participants,
+                    }
+                )
+
+    print(f"  EC->SEED index: {len(ec_to_seed)} EC numbers with SEED")
+
+    fallback_count = 0
+    rejected_by_participants = 0
+    discarded_by_best_overlap = 0
+    missing_participants = 0
+    no_ec = 0
+
+    for row in reac_rows:
+        if row.get("seed", ""):
+            continue
+
+        ecs = split_pipe(row.get("ec", ""))
+        if not ecs:
+            no_ec += 1
+            continue
+
+        source_participants = set(
+            mnx_mapping.get(row.get("mnx_id", ""), {}).get("participants", [])
+        )
+        if not source_participants:
+            missing_participants += 1
+            continue
+
+        fallback_scores = {}
+        for ec in ecs:
+            for candidate in ec_to_seed.get(ec, []):
+                overlap = participant_overlap(
+                    source_participants,
+                    candidate["participants"],
+                )
+                if overlap < min_participant_overlap:
+                    rejected_by_participants += 1
+                    continue
+
+                seed_id = candidate["seed"]
+                fallback_scores[seed_id] = max(
+                    fallback_scores.get(seed_id, 0.0),
+                    overlap,
+                )
+
+        if not fallback_scores:
+            continue
+
+        best_overlap = max(fallback_scores.values())
+        fallback_seed = sorted(
+            seed_id
+            for seed_id, score in fallback_scores.items()
+            if score == best_overlap
+        )
+        discarded_by_best_overlap += len(fallback_scores) - len(fallback_seed)
+        row["seed"] = "|".join(fallback_seed)
+
+        amb = row.get("ambiguous", "")
+        seed_note = f"seed_ec_fallback(participants>={min_participant_overlap:.2f}"
+        if len(fallback_seed) > 1:
+            seed_note += f",seed:{len(fallback_seed)}"
+        seed_note += ")"
+        row["ambiguous"] = f"{amb},{seed_note}" if amb else seed_note
+        fallback_count += 1
+
+    print(f"  SEED EC fallback: {fallback_count} reactions got SEED via EC")
+    print(
+        "  SEED EC fallback candidates rejected by participant overlap: "
+        f"{rejected_by_participants}"
+    )
+    if discarded_by_best_overlap:
+        print(
+            "  SEED EC fallback lower-overlap SEED IDs discarded: "
+            f"{discarded_by_best_overlap}"
+        )
+    if missing_participants:
+        print(
+            "  SEED EC fallback rows skipped without participant data: "
+            f"{missing_participants}"
+        )
+    if no_ec:
+        print(f"  SEED EC fallback rows skipped without EC: {no_ec}")
     return reac_rows
 
 
@@ -476,9 +603,18 @@ def compute_stats(rows, name, target_namespaces):
     ambiguous = sum(1 for r in rows if r.get("ambiguous", ""))
     lines.append(f"  Ambiguous: {ambiguous}/{total} ({ambiguous/total*100:.1f}%)")
 
-    ec_fb = sum(1 for r in rows if "ec_fallback" in r.get("ambiguous", ""))
-    if ec_fb:
-        lines.append(f"  EC fallback: {ec_fb}")
+    bigg_ec_fb = sum(
+        1 for r in rows if has_ambiguous_marker(r.get("ambiguous", ""), "ec_fallback")
+    )
+    seed_ec_fb = sum(
+        1
+        for r in rows
+        if has_ambiguous_marker(r.get("ambiguous", ""), "seed_ec_fallback")
+    )
+    if bigg_ec_fb:
+        lines.append(f"  BiGG EC fallback: {bigg_ec_fb}")
+    if seed_ec_fb:
+        lines.append(f"  SEED EC fallback: {seed_ec_fb}")
 
     amb_examples = [r for r in rows if r.get("ambiguous", "")][:5]
     if amb_examples:
@@ -509,7 +645,7 @@ def compute_stats(rows, name, target_namespaces):
 def main():
     print("=" * 60)
     print("  MetaNetX ID Mapping Builder")
-    print("  KEGG <-> MNXref <-> BiGG / SEED + EC fallback")
+    print("  KEGG <-> MNXref <-> BiGG / SEED + EC fallbacks")
     print("=" * 60)
 
     # 1. Download
@@ -540,9 +676,11 @@ def main():
                                   "kegg.reaction")
     print(f"  Total rows: {len(reac_rows)}")
 
-    # 3.5. EC fallback (offline)
-    print("\n  -- EC fallback (offline) --")
+    # 3.5. EC fallbacks (offline)
+    print("\n  -- BiGG EC fallback (offline) --")
     reac_rows = build_ec_fallback_offline(reac_mapping, reac_rows)
+    print("\n  -- SEED EC fallback (offline) --")
+    reac_rows = build_seed_ec_fallback_offline(reac_mapping, reac_rows)
 
     # 4. Write
     print("\n[4/4] Writing results...")

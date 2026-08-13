@@ -190,6 +190,8 @@ def build_escher_map(
     metabolite_id_compartments: bool | None = None,
     compartment: str | None = None,
     use_fallback_matching: bool = True,
+    use_bigg_fallback_matching: bool = True,
+    use_seed_fallback_matching: bool = True,
 ) -> tuple[list[dict[str, Any]], dict[str, Any]]:
     options = _resolve_visualization_options(
         visualization_options,
@@ -223,6 +225,8 @@ def build_escher_map(
         metabolite_id_compartments=metabolite_id_compartments,
         compartment_filter=compartment,
         use_fallback_matching=use_fallback_matching,
+        use_bigg_fallback_matching=use_bigg_fallback_matching,
+        use_seed_fallback_matching=use_seed_fallback_matching,
     )
     escher_map = mapper.build_map(cobra_model)
     kegg_reconstruction["map_stats"] = mapper.map_stats
@@ -337,6 +341,8 @@ def build_outputs(
     metabolite_id_compartments: bool | None = None,
     compartment: str | None = None,
     use_fallback_matching: bool = True,
+    use_bigg_fallback_matching: bool = True,
+    use_seed_fallback_matching: bool = True,
     save_kegg_map: bool = False,
     save_html: bool = False,
 ) -> BioEmmaResult:
@@ -372,6 +378,8 @@ def build_outputs(
         metabolite_id_compartments=metabolite_id_compartments,
         compartment_filter=compartment,
         use_fallback_matching=use_fallback_matching,
+        use_bigg_fallback_matching=use_bigg_fallback_matching,
+        use_seed_fallback_matching=use_seed_fallback_matching,
     )
     escher_map = mapper.build_map(cobra_model)
     kegg_escher_map = None
@@ -382,6 +390,8 @@ def build_outputs(
             database=database,
             **_mapper_visualization_kwargs(options),
             use_fallback_matching=use_fallback_matching,
+            use_bigg_fallback_matching=use_bigg_fallback_matching,
+            use_seed_fallback_matching=use_seed_fallback_matching,
         )
         kegg_escher_map = kegg_mapper.build_kegg_map()
     coerced_fluxes = coerce_fluxes(cobra_model, fluxes, run_fba=run_fba)
@@ -397,6 +407,8 @@ def build_outputs(
         "compartment_filter": mapper.compartment_filter,
         "reaction_matching_options": {
             "use_fallback_matching": use_fallback_matching,
+            "use_bigg_fallback_matching": use_bigg_fallback_matching,
+            "use_seed_fallback_matching": use_seed_fallback_matching,
         },
         "has_fluxes": coerced_fluxes is not None,
         "visualization_options": _visualization_options_summary(options),
@@ -500,6 +512,8 @@ def build_many_outputs(
     metabolite_id_compartments: bool | None = None,
     compartment: str | None = None,
     use_fallback_matching: bool = True,
+    use_bigg_fallback_matching: bool = True,
+    use_seed_fallback_matching: bool = True,
     save_kegg_map: bool = False,
     save_html: bool = False,
 ) -> BioEmmaBatchResult:
@@ -551,6 +565,8 @@ def build_many_outputs(
                 metabolite_id_compartments=metabolite_id_compartments,
                 compartment=compartment,
                 use_fallback_matching=use_fallback_matching,
+                use_bigg_fallback_matching=use_bigg_fallback_matching,
+                use_seed_fallback_matching=use_seed_fallback_matching,
                 save_kegg_map=save_kegg_map,
                 save_html=save_html,
                 **kwargs,
@@ -600,6 +616,8 @@ def build_many_outputs(
         "compartment_filter": _normalize_compartment_filter(compartment),
         "reaction_matching_options": {
             "use_fallback_matching": use_fallback_matching,
+            "use_bigg_fallback_matching": use_bigg_fallback_matching,
+            "use_seed_fallback_matching": use_seed_fallback_matching,
         },
         "visualization_options": _visualization_options_summary(options),
         "metabolite_id_options": {
