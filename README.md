@@ -104,9 +104,10 @@ for Escher overlays.
 
 ### Reaction matching fallback
 
-By default, BioEMMA enables fallback reaction matching
-(`use_fallback_matching=True`). The matcher first prefers direct identifiers
-and only then uses broader fallback identifiers:
+By default, BioEMMA disables fallback reaction matching
+(`use_fallback_matching=False`). In strict mode, the matcher uses direct
+KEGG/BiGG/SEED identifiers only. When enabled, it first prefers direct
+identifiers and only then uses broader fallback identifiers:
 
 1. direct BiGG cross-reference;
 2. direct KEGG reaction annotation;
@@ -123,26 +124,27 @@ with `ec_fallback(...)` and `seed_ec_fallback(...)` markers. Both use a
 minimum 50% overlap of MetaNetX reaction participants and keep only the
 highest-overlap candidate IDs.
 
-To build a strict baseline with only KEGG/BiGG/SEED matches, disable fallback:
+To enable broader fallback matching:
 
 ```python
 result = build_outputs(
     model="path/to/model.xml",
     pathway="rn00020",
     output_dir="out",
-    use_fallback_matching=False,
+    use_fallback_matching=True,
 )
 ```
 
 The EC-derived BiGG and SEED layers can also be switched independently while
-leaving the other fallback identifiers enabled:
+leaving the other fallback identifiers enabled. They are disabled by default
+and must be enabled explicitly when you want EC-inferred database IDs:
 
 ```python
 result = build_outputs(
     model="path/to/model.xml",
     pathway="rn00020",
     output_dir="out",
-    use_bigg_fallback_matching=False,
+    use_bigg_fallback_matching=True,
     use_seed_fallback_matching=True,
 )
 ```
@@ -150,11 +152,11 @@ result = build_outputs(
 The same option is available in the CLI:
 
 ```bash
-bioemma build --model path/to/model.xml --pathway rn00020 --output-dir out --no-fallback-matching
+bioemma build --model path/to/model.xml --pathway rn00020 --output-dir out --fallback-matching
 ```
 
-Use `--no-bigg-fallback-matching` or `--no-seed-fallback-matching` to disable
-only one EC-derived layer.
+Use `--bigg-fallback-matching` or `--seed-fallback-matching` to enable an
+EC-derived layer.
 
 The selected mode and per-method reaction match counts are written to
 `summary.json` under `reaction_matching_options` and

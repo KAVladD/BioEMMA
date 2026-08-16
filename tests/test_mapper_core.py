@@ -291,6 +291,7 @@ def test_ec_fallback_bigg_mapping_is_ignored_without_fallback_matching():
         reactions,
         scaling_factor=1,
         use_fallback_matching=True,
+        use_bigg_fallback_matching=True,
     )
     fallback_mapper.r_mapper["R01518"]._bigg_all = ["PGM"]
     fallback_mapper.r_mapper["R01518"]._is_ec_fallback = True
@@ -329,6 +330,7 @@ def test_bigg_ec_fallback_can_be_disabled_independently():
         scaling_factor=1,
         use_fallback_matching=True,
         use_bigg_fallback_matching=False,
+        use_seed_fallback_matching=True,
     )
     mapper.r_mapper["R01518"]._bigg_all = ["PGM"]
     mapper.r_mapper["R01518"]._is_ec_fallback = True
@@ -585,7 +587,12 @@ def test_duplicate_kegg_matches_to_same_model_reaction_keep_stronger_match():
         reactions = [FakeReaction()]
         metabolites = []
 
-    mapper = EscherMapper({}, reactions, scaling_factor=1)
+    mapper = EscherMapper(
+        {},
+        reactions,
+        scaling_factor=1,
+        use_bigg_fallback_matching=True,
+    )
     mapper.r_mapper["R01061"]._bigg_all = ["GAPD"]
     mapper.r_mapper["R01063"]._bigg_all = ["GAPDH_nadp_hi"]
     mapper.r_mapper["R01063"]._ec_all = ["1.2.1.12"]
@@ -632,7 +639,13 @@ def test_distinct_model_reactions_at_same_kegg_position_are_kept():
         ]
         metabolites = []
 
-    mapper = EscherMapper({}, reactions, scaling_factor=1, markers_dist=10)
+    mapper = EscherMapper(
+        {},
+        reactions,
+        scaling_factor=1,
+        markers_dist=10,
+        use_bigg_fallback_matching=True,
+    )
     mapper.r_mapper["R01061"]._bigg_all = ["GAPD"]
     mapper.r_mapper["R01063"]._bigg_all = ["GAPDy"]
 

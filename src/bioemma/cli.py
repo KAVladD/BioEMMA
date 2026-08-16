@@ -197,17 +197,17 @@ def main() -> None:
     build_parser.add_argument(
         "--fallback-matching",
         action=argparse.BooleanOptionalAction,
-        default=True,
+        default=False,
         help=(
             "Use fallback reaction matching through EC-derived BiGG/SEED, "
-            "MetaCyc, Rhea, and EC annotations. Use --no-fallback-matching "
-            "to keep strict KEGG/BiGG/SEED matches only."
+            "MetaCyc, Rhea, and EC annotations. Disabled by default to keep "
+            "strict KEGG/BiGG/SEED matches only."
         ),
     )
     build_parser.add_argument(
         "--bigg-fallback-matching",
         action=argparse.BooleanOptionalAction,
-        default=True,
+        default=False,
         help=(
             "Use BiGG identifiers inferred by EC fallback. Requires "
             "--fallback-matching to be enabled."
@@ -216,7 +216,7 @@ def main() -> None:
     build_parser.add_argument(
         "--seed-fallback-matching",
         action=argparse.BooleanOptionalAction,
-        default=True,
+        default=False,
         help=(
             "Use SEED identifiers inferred by EC fallback. Requires "
             "--fallback-matching to be enabled."

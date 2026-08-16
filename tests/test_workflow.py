@@ -102,9 +102,9 @@ def test_build_outputs_returns_and_saves_core_artifacts(monkeypatch, tmp_path):
     assert saved_summary["model"]["metabolites"] == 72
     assert saved_summary["database"] == "BIGG"
     assert saved_summary["reaction_matching_options"] == {
-        "use_fallback_matching": True,
-        "use_bigg_fallback_matching": True,
-        "use_seed_fallback_matching": True,
+        "use_fallback_matching": False,
+        "use_bigg_fallback_matching": False,
+        "use_seed_fallback_matching": False,
     }
     assert saved_summary["identifier_coverage"]["reactions"]["BIGG"]["mapped"] > 0
     assert saved_summary["identifier_coverage"]["metabolites"]["SEED"]["mapped"] > 0
@@ -174,7 +174,6 @@ def test_cli_build_writes_workflow_outputs(monkeypatch, tmp_path):
             "BIGG",
             "--compartment",
             "c",
-            "--no-fallback-matching",
             "--scaling-factor",
             "5",
             "--axis-epsilon",
@@ -198,8 +197,8 @@ def test_cli_build_writes_workflow_outputs(monkeypatch, tmp_path):
     assert saved_summary["compartment_filter"] == "c"
     assert saved_summary["reaction_matching_options"] == {
         "use_fallback_matching": False,
-        "use_bigg_fallback_matching": True,
-        "use_seed_fallback_matching": True,
+        "use_bigg_fallback_matching": False,
+        "use_seed_fallback_matching": False,
     }
     assert (
         saved_summary["map_stats"]["model_matching"]["use_fallback_matching"] is False
@@ -231,8 +230,8 @@ def test_build_many_outputs_merges_saved_maps(monkeypatch, tmp_path):
     assert result.paths["merged_escher_map_json"].is_file()
     assert result.summary["reaction_matching_options"] == {
         "use_fallback_matching": False,
-        "use_bigg_fallback_matching": True,
-        "use_seed_fallback_matching": True,
+        "use_bigg_fallback_matching": False,
+        "use_seed_fallback_matching": False,
     }
     assert all(
         item.summary["reaction_matching_options"]["use_fallback_matching"] is False

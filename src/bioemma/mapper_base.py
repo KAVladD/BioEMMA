@@ -27,9 +27,9 @@ class EscherMapper:
                  use_database_secondary_metabolite_ids: bool = False,
                  metabolite_id_compartments: bool | None = None,
                  compartment_filter: str | None = None,
-                 use_fallback_matching: bool = True,
-                 use_bigg_fallback_matching: bool = True,
-                 use_seed_fallback_matching: bool = True,
+                 use_fallback_matching: bool = False,
+                 use_bigg_fallback_matching: bool = False,
+                 use_seed_fallback_matching: bool = False,
                  canvas_width: float = 1000,
                  canvas_height: float = 1000,
                  axis_epsilon: float = 2,):

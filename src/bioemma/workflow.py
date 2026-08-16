@@ -189,9 +189,9 @@ def build_escher_map(
     use_database_secondary_metabolite_ids: bool = False,
     metabolite_id_compartments: bool | None = None,
     compartment: str | None = None,
-    use_fallback_matching: bool = True,
-    use_bigg_fallback_matching: bool = True,
-    use_seed_fallback_matching: bool = True,
+    use_fallback_matching: bool = False,
+    use_bigg_fallback_matching: bool = False,
+    use_seed_fallback_matching: bool = False,
 ) -> tuple[list[dict[str, Any]], dict[str, Any]]:
     options = _resolve_visualization_options(
         visualization_options,
@@ -340,9 +340,9 @@ def build_outputs(
     use_database_secondary_metabolite_ids: bool = False,
     metabolite_id_compartments: bool | None = None,
     compartment: str | None = None,
-    use_fallback_matching: bool = True,
-    use_bigg_fallback_matching: bool = True,
-    use_seed_fallback_matching: bool = True,
+    use_fallback_matching: bool = False,
+    use_bigg_fallback_matching: bool = False,
+    use_seed_fallback_matching: bool = False,
     save_kegg_map: bool = False,
     save_html: bool = False,
 ) -> BioEmmaResult:
@@ -511,9 +511,9 @@ def build_many_outputs(
     use_database_secondary_metabolite_ids: bool = False,
     metabolite_id_compartments: bool | None = None,
     compartment: str | None = None,
-    use_fallback_matching: bool = True,
-    use_bigg_fallback_matching: bool = True,
-    use_seed_fallback_matching: bool = True,
+    use_fallback_matching: bool = False,
+    use_bigg_fallback_matching: bool = False,
+    use_seed_fallback_matching: bool = False,
     save_kegg_map: bool = False,
     save_html: bool = False,
 ) -> BioEmmaBatchResult:
